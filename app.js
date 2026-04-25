@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.2.1";
+const APP_VERSION = "2.2.2";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -31,7 +31,6 @@ const firebaseFetch = async (path, method = 'GET', body = null) => {
 const TYPES_CONFIG = {
   'Congé':        { color: 'bg-blue-100',   border: 'border-blue-400',   icon: '🏖️', text: 'text-blue-700'   },
   'Maladie':      { color: 'bg-orange-100', border: 'border-orange-400', icon: '🤒', text: 'text-orange-700' },
-  'Temps partiel':{ color: 'bg-yellow-100', border: 'border-yellow-400', icon: '⏰', text: 'text-yellow-700' },
 };
 const getTypeConfig = (type) => {
   if (!type) return TYPES_CONFIG['Congé'];
@@ -44,7 +43,6 @@ const getTypeConfig = (type) => {
 const TYPE_COLORS = {
   'Conge':        '#3b82f6',
   'Maladie':      '#f97316',
-  'Temps partiel':'#eab308',
   'default':      '#6b7280',
 };
 const getTypeColor = (type) => {
@@ -54,6 +52,15 @@ const getTypeColor = (type) => {
   if (t.includes('partiel')) return TYPE_COLORS['Temps partiel'];
   return TYPE_COLORS['Conge'];
 };
+
+
+// ===== HELPER DATE LOCAL (évite le bug timezone de toISOString) =====
+// toISOString() retourne UTC : en Belgique (UTC+2), minuit local = 22h UTC la veille
+// → décalage d'un jour. On utilise getFullYear/Month/Date (heure locale) à la place.
+const toLocalDateStr = (d) =>
+  d.getFullYear() + '-' +
+  String(d.getMonth() + 1).padStart(2, '0') + '-' +
+  String(d.getDate()).padStart(2, '0');
 
 // ===== JOURS =====
 const JOURS_SEMAINE = [
@@ -155,8 +162,8 @@ const saveConge = async (conge) => {
   const congeId = generateId('conge');
   const payload = {
     employe_id,
-    dateDebut:  debut.toISOString().split('T')[0],
-    dateFin:    fin.toISOString().split('T')[0],
+    dateDebut:  toLocalDateStr(debut),
+    dateFin:    toLocalDateStr(fin),
     type, nbJours,
     createdAt:  new Date().toISOString(),
   };
@@ -213,7 +220,7 @@ const expandRecurrence = (rec, year, month) => {
 
     if (rec.pattern === 'weekly') {
       if ((rec.jours || []).includes(dow)) {
-        results.push({ date: cur.toISOString().split('T')[0], demi_journee: rec.demi_journee || null });
+        results.push({ date: toLocalDateStr(cur), demi_journee: rec.demi_journee || null });
       }
     } else if (rec.pattern === 'biweekly') {
       // Numéro de semaine ISO
@@ -224,7 +231,7 @@ const expandRecurrence = (rec, year, month) => {
       const isPaire   = weekNum % 2 === 0;
       const joursActifs = isPaire ? (rec.joursP || []) : (rec.joursI || []);
       if (joursActifs.includes(dow)) {
-        results.push({ date: cur.toISOString().split('T')[0], demi_journee: rec.demi_journee || null });
+        results.push({ date: toLocalDateStr(cur), demi_journee: rec.demi_journee || null });
       }
     }
     cur.setDate(cur.getDate() + 1);
@@ -241,7 +248,7 @@ const nettoyerAnciensConges = async () => {
   const limite = new Date();
   limite.setMonth(limite.getMonth() - 2);
   limite.setDate(1);
-  const limiteStr = limite.toISOString().split('T')[0];
+  const limiteStr = toLocalDateStr(limite);
 
   try {
     // Congés ponctuels
@@ -277,7 +284,7 @@ const expandCongeToJours = (conge) => {
     let cur = new Date(conge.dateDebut);
     const fin = new Date(conge.dateFin);
     while (cur <= fin) {
-      jours.push({ ...conge, date: cur.toISOString().split('T')[0] });
+      jours.push({ ...conge, date: toLocalDateStr(cur) });
       cur.setDate(cur.getDate() + 1);
     }
     return jours;
@@ -662,11 +669,11 @@ const CongesApp = () => {
           React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
         ),
         React.createElement('div', { className:'flex gap-2' },
-          ['congés','récurrences','collaborateurs'].map(page =>
+          ['congés','temps partiel','collaborateurs'].map(page =>
             React.createElement('button', {
               key: page, onClick:()=>setRhPage(page),
               className:`px-5 py-3 border-b-2 capitalize text-sm font-medium ${rhPage===page ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500'}`
-            }, page === 'récurrences' ? '⏰ Récurrences' : page === 'congés' ? '📋 Congés' : `👥 Collaborateurs (${employes.length})`)
+            }, page === 'temps partiel' ? '⏰ Temps partiel' : page === 'congés' ? '📋 Congés' : `👥 Collaborateurs (${employes.length})`)
           )
         )
       )
@@ -691,7 +698,7 @@ const CongesApp = () => {
               value:newConge.type, onChange:e=>setNewConge({...newConge,type:e.target.value}),
               className:'w-full px-3 py-2 border rounded text-sm'
             },
-              ['Congé','Maladie','Temps partiel'].map(t=>React.createElement('option',{key:t,value:t},`${getTypeConfig(t).icon} ${t}`))
+              ['Congé','Maladie'].map(t=>React.createElement('option',{key:t,value:t},`${getTypeConfig(t).icon} ${t}`))
             ),
             React.createElement('select', {
               value:newConge.demi_journee, onChange:e=>setNewConge({...newConge,demi_journee:e.target.value}),
@@ -785,7 +792,7 @@ const CongesApp = () => {
       ),
 
       // ── Onglet Récurrences ───────────────────────────────────────────────
-      rhPage === 'récurrences' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
+      rhPage === 'temps partiel' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
         React.createElement('div', { className:'col-span-1' },
           showRecurForm
             ? React.createElement(FormulaireRecurrence, {
