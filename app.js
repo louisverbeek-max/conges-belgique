@@ -86,13 +86,20 @@ const CongesApp = () => {
       method: 'PUT',
       body: JSON.stringify(newEmp)
     })
+    .then(resp => {
+      if (!resp.ok) throw new Error(`Erreur Firebase: ${resp.status}`);
+      return resp.json();
+    })
     .then(() => {
       chargerDonnees();
       setNewCollaborateur('');
       setEditingId(null);
-      alert('✅ Enregistré !');
+      alert('Enregistré');
     })
-    .catch(err => alert('❌ Erreur: ' + err.message));
+    .catch(err => {
+      console.error('Erreur ajout collaborateur:', err);
+      alert('Erreur: ' + err.message);
+    });
   };
 
   const supprimerCollaborateur = (id) => {
@@ -117,6 +124,9 @@ const CongesApp = () => {
         fetch(`${FIREBASE_URL}/conges/${congeId}.json`, {
           method: 'PUT',
           body: JSON.stringify({ employe_id: newConge.employe_id, date: dateStr, type: newConge.type })
+        }).then(resp => {
+          if (!resp.ok) throw new Error(`Erreur Firebase: ${resp.status}`);
+          return resp.json();
         })
       );
       currentDate.setDate(currentDate.getDate() + 1);
@@ -126,9 +136,12 @@ const CongesApp = () => {
     .then(() => {
       chargerDonnees();
       setNewConge({ employe_id: '', dateDebut: '', dateFin: '', type: 'Congé' });
-      alert('✅ Ajouté !');
+      alert('Ajouté');
     })
-    .catch(err => alert('❌ Erreur: ' + err.message));
+    .catch(err => {
+      console.error('Erreur ajout congé:', err);
+      alert('Erreur: ' + err.message);
+    });
   };
 
   const supprimerConge = (id) => {
