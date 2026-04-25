@@ -5,6 +5,10 @@ const APP_VERSION = "2.0.0-firebase-clean";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
+const FIREBASE_API_KEY = "AIzaSyBphnA1yYQpGLd66yuReFK7dgwoIsgLwGE";
+
+// Fonction helper pour ajouter la clé API aux URLs Firebase
+const getFirebaseUrl = (path) => `${FIREBASE_URL}${path}.json?auth=${FIREBASE_API_KEY}`;
 
 const TYPES_CONFIG = {
   'Congé': { color: 'bg-blue-100', border: 'border-blue-400', icon: '🏖️', text: 'text-blue-700' },
@@ -47,7 +51,7 @@ const CongesApp = () => {
 
   const chargerDonnees = async () => {
     try {
-      const empResponse = await fetch(`${FIREBASE_URL}/employes.json`);
+      const empResponse = await fetch(getFirebaseUrl('/employes'));
       if (empResponse.ok) {
         const empData = await empResponse.json();
         if (empData) {
@@ -58,7 +62,7 @@ const CongesApp = () => {
         }
       }
 
-      const conResponse = await fetch(`${FIREBASE_URL}/conges.json`);
+      const conResponse = await fetch(getFirebaseUrl('/conges'));
       if (conResponse.ok) {
         const conData = await conResponse.json();
         if (conData) {
@@ -82,7 +86,7 @@ const CongesApp = () => {
     const newId = editingId || `emp_${Date.now()}`;
     const newEmp = { nom: newCollaborateur };
 
-    fetch(`${FIREBASE_URL}/employes/${newId}.json`, {
+    fetch(getFirebaseUrl(`/employes/${newId}`), {
       method: 'PUT',
       body: JSON.stringify(newEmp)
     })
@@ -104,7 +108,7 @@ const CongesApp = () => {
 
   const supprimerCollaborateur = (id) => {
     if (conges.some(c => c.employe_id === id) && !window.confirm('Supprimer ?')) return;
-    fetch(`${FIREBASE_URL}/employes/${id}.json`, { method: 'DELETE' })
+    fetch(getFirebaseUrl(`/employes/${id}`), { method: 'DELETE' })
     .then(() => chargerDonnees());
   };
 
@@ -121,7 +125,7 @@ const CongesApp = () => {
       const dateStr = currentDate.toISOString().split('T')[0];
       const congeId = `conge_${Date.now()}_${Math.random()}`;
       promises.push(
-        fetch(`${FIREBASE_URL}/conges/${congeId}.json`, {
+        fetch(getFirebaseUrl(`/conges/${congeId}`), {
           method: 'PUT',
           body: JSON.stringify({ employe_id: newConge.employe_id, date: dateStr, type: newConge.type })
         }).then(resp => {
@@ -145,7 +149,7 @@ const CongesApp = () => {
   };
 
   const supprimerConge = (id) => {
-    fetch(`${FIREBASE_URL}/conges/${id}.json`, { method: 'DELETE' })
+    fetch(getFirebaseUrl(`/conges/${id}`), { method: 'DELETE' })
     .then(() => chargerDonnees());
   };
 
@@ -242,14 +246,14 @@ const CongesApp = () => {
         React.createElement('div', { className: 'max-w-7xl mx-auto px-6 py-4' },
           React.createElement('div', { className: 'flex justify-between items-center mb-4' },
             React.createElement('div', null,
-              React.createElement('h1', { className: 'text-2xl font-bold' }, '🔥 RH - Gestion des Congés'),
-              React.createElement('p', { className: 'text-sm text-gray-600' }, `📅 ${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
+              React.createElement('h1', { className: 'text-2xl font-bold' }, 'RH - Gestion des Congés'),
+              React.createElement('p', { className: 'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
             ),
             React.createElement('button', { onClick: handleLogout, className: 'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
           ),
           React.createElement('div', { className: 'flex gap-2' },
-            React.createElement('button', { onClick: () => setRhPage('congés'), className: `px-6 py-3 border-b-2 ${rhPage === 'congés' ? 'border-red-600 text-red-600' : 'border-transparent'}` }, '📅 Congés'),
-            React.createElement('button', { onClick: () => setRhPage('collaborateurs'), className: `px-6 py-3 border-b-2 ${rhPage === 'collaborateurs' ? 'border-red-600 text-red-600' : 'border-transparent'}` }, `👥 ${employes.length}`)
+            React.createElement('button', { onClick: () => setRhPage('congés'), className: `px-6 py-3 border-b-2 ${rhPage === 'congés' ? 'border-red-600 text-red-600' : 'border-transparent'}` }, 'Congés'),
+            React.createElement('button', { onClick: () => setRhPage('collaborateurs'), className: `px-6 py-3 border-b-2 ${rhPage === 'collaborateurs' ? 'border-red-600 text-red-600' : 'border-transparent'}` }, `${employes.length}`)
           )
         )
       ),
@@ -273,7 +277,7 @@ const CongesApp = () => {
           React.createElement('div', { className: 'col-span-2' },
             React.createElement('div', { className: 'grid grid-cols-2 gap-8' },
               React.createElement('div', { className: 'bg-white rounded shadow p-6' },
-                React.createElement('h3', { className: 'font-bold text-lg mb-4' }, `📋 Auj (${aujourd_hui.getDate()})`),
+                React.createElement('h3', { className: 'font-bold text-lg mb-4' }, `Auj (${aujourd_hui.getDate()})`),
                 getTodayAbsents().length === 0 ? React.createElement('p', { className: 'text-gray-500' }, 'Aucune') :
                   getTodayAbsents().map((a, i) => {
                     const cfg = getTypeConfig(a.type);
@@ -287,7 +291,7 @@ const CongesApp = () => {
                   })
               ),
               React.createElement('div', { className: 'bg-white rounded shadow p-6' },
-                React.createElement('h3', { className: 'font-bold text-lg mb-4' }, '📊 Stats'),
+                React.createElement('h3', { className: 'font-bold text-lg mb-4' }, 'Stats'),
                 React.createElement('div', { className: 'space-y-2 text-sm' },
                   React.createElement('p', null, `Collabs: ${employes.length}`),
                   React.createElement('p', null, `Absences: ${conges.length}`),
@@ -299,7 +303,7 @@ const CongesApp = () => {
         ) : React.createElement('div', { className: 'grid grid-cols-3 gap-8' },
           React.createElement('div', { className: 'col-span-1' },
             React.createElement('div', { className: 'bg-white rounded shadow p-6 space-y-4' },
-              React.createElement('h2', { className: 'font-bold text-lg' }, editingId ? '✎ Modifier' : '+ Ajouter'),
+              React.createElement('h2', { className: 'font-bold text-lg' }, editingId ? 'Modifier' : '+ Ajouter'),
               React.createElement('input', { type: 'text', value: newCollaborateur, onChange: (e) => setNewCollaborateur(e.target.value), className: 'w-full px-3 py-2 border rounded', placeholder: 'Nom', required: true }),
               React.createElement('button', { onClick: ajouterCollaborateur, className: 'w-full bg-blue-600 text-white py-2 rounded' }, editingId ? 'Mettre à jour' : 'Ajouter')
             )
@@ -316,8 +320,8 @@ const CongesApp = () => {
                       React.createElement('p', { className: 'text-xs text-gray-600' }, `${nbConges}j`)
                     ),
                     React.createElement('div', { className: 'flex gap-2' },
-                      React.createElement('button', { onClick: () => { setNewCollaborateur(e.nom); setEditingId(e.id); }, className: 'px-2 py-1 bg-yellow-100 text-xs rounded' }, '✎'),
-                      React.createElement('button', { onClick: () => supprimerCollaborateur(e.id), className: 'px-2 py-1 bg-red-100 text-xs rounded' }, '🗑️')
+                      React.createElement('button', { onClick: () => { setNewCollaborateur(e.nom); setEditingId(e.id); }, className: 'px-2 py-1 bg-yellow-100 text-xs rounded' }, 'Modifier'),
+                      React.createElement('button', { onClick: () => supprimerCollaborateur(e.id), className: 'px-2 py-1 bg-red-100 text-xs rounded' }, 'Supprimer')
                     )
                   );
                 })
@@ -334,7 +338,7 @@ const CongesApp = () => {
       React.createElement('div', { className: 'max-w-4xl mx-auto px-6 py-4 flex justify-between items-center' },
         React.createElement('div', null,
           React.createElement('h1', { className: 'text-2xl font-bold' }, 'Calendrier des Congés'),
-          React.createElement('p', { className: 'text-sm text-gray-600' }, `📅 ${aujourd_hui.toLocaleDateString('fr-BE')}`)
+          React.createElement('p', { className: 'text-sm text-gray-600' }, aujourd_hui.toLocaleDateString('fr-BE'))
         ),
         React.createElement('div', { className: 'flex items-center gap-4' },
           React.createElement('span', { className: 'text-xs text-gray-500' }, `v${APP_VERSION}`),
