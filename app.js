@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.2.1";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -287,6 +287,153 @@ const expandCongeToJours = (conge) => {
 };
 
 // ===== COMPOSANT PRINCIPAL =====
+// ===== FORMULAIRE RÉCURRENCE (composant autonome) =====
+// Extrait de CongesApp pour éviter sa recréation à chaque render parent,
+// ce qui causait la perte de focus sur les inputs date et select.
+const FormulaireRecurrence = ({
+  newRecur, setNewRecur, emptyRecur,
+  editRecurId, setEditRecurId,
+  setShowRecurForm, employes,
+  ajouterRecurrence, saveError,
+}) => {
+  const toggleJour = (list, day) =>
+    list.includes(day) ? list.filter(d => d !== day) : [...list, day];
+
+  return React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4 border-l-4 border-yellow-400' },
+    React.createElement('h2', { className:'font-bold text-lg flex items-center gap-2' },
+      '⏰', editRecurId ? 'Modifier la récurrence' : '+ Nouvelle récurrence'
+    ),
+
+    saveError && React.createElement('div', { className:'bg-red-50 border border-red-300 text-red-700 rounded p-2 text-xs' }, saveError),
+
+    React.createElement('div', null,
+      React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Collaborateur *'),
+      React.createElement('select', {
+        value: newRecur.employe_id, required: true,
+        onChange: e => setNewRecur({ ...newRecur, employe_id: e.target.value }),
+        className:'w-full px-3 py-2 border rounded text-sm'
+      },
+        React.createElement('option', { value:'' }, 'Sélectionner…'),
+        employes.map(e => React.createElement('option', { key:e.id, value:e.id }, e.nom))
+      )
+    ),
+
+    React.createElement('div', null,
+      React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Type de récurrence *'),
+      React.createElement('select', {
+        value: newRecur.pattern,
+        onChange: e => setNewRecur({ ...newRecur, pattern: e.target.value }),
+        className:'w-full px-3 py-2 border rounded text-sm'
+      },
+        React.createElement('option', { value:'weekly' },   'Toutes les semaines'),
+        React.createElement('option', { value:'biweekly' }, 'Semaines paires / impaires')
+      )
+    ),
+
+    newRecur.pattern === 'weekly' && React.createElement('div', null,
+      React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Jours actifs *'),
+      React.createElement('div', { className:'flex flex-wrap gap-2' },
+        JOURS_SEMAINE.map(j =>
+          React.createElement('button', {
+            key: j.value, type:'button',
+            onClick: () => setNewRecur({ ...newRecur, jours: toggleJour(newRecur.jours, j.value) }),
+            className: 'px-3 py-1 rounded text-sm font-medium border-2 transition ' + (
+              newRecur.jours.includes(j.value)
+                ? 'bg-yellow-400 border-yellow-500 text-white'
+                : 'bg-white border-gray-300 text-gray-600'
+            )
+          }, j.label)
+        )
+      )
+    ),
+
+    newRecur.pattern === 'biweekly' && React.createElement('div', { className:'space-y-3' },
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines PAIRES'),
+        React.createElement('div', { className:'flex flex-wrap gap-2' },
+          JOURS_SEMAINE.map(j =>
+            React.createElement('button', {
+              key: j.value, type:'button',
+              onClick: () => setNewRecur({ ...newRecur, joursP: toggleJour(newRecur.joursP, j.value) }),
+              className: 'px-3 py-1 rounded text-sm font-medium border-2 transition ' + (
+                newRecur.joursP.includes(j.value)
+                  ? 'bg-blue-400 border-blue-500 text-white'
+                  : 'bg-white border-gray-300 text-gray-600'
+              )
+            }, j.label)
+          )
+        )
+      ),
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines IMPAIRES'),
+        React.createElement('div', { className:'flex flex-wrap gap-2' },
+          JOURS_SEMAINE.map(j =>
+            React.createElement('button', {
+              key: j.value, type:'button',
+              onClick: () => setNewRecur({ ...newRecur, joursI: toggleJour(newRecur.joursI, j.value) }),
+              className: 'px-3 py-1 rounded text-sm font-medium border-2 transition ' + (
+                newRecur.joursI.includes(j.value)
+                  ? 'bg-purple-400 border-purple-500 text-white'
+                  : 'bg-white border-gray-300 text-gray-600'
+              )
+            }, j.label)
+          )
+        )
+      )
+    ),
+
+    React.createElement('div', null,
+      React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Demi-journée (optionnel)'),
+      React.createElement('select', {
+        value: newRecur.demi_journee,
+        onChange: e => setNewRecur({ ...newRecur, demi_journee: e.target.value }),
+        className:'w-full px-3 py-2 border rounded text-sm'
+      },
+        React.createElement('option', { value:'' }, 'Journée entière'),
+        React.createElement('option', { value:'AM' }, '☀️ Matin seulement (AM)'),
+        React.createElement('option', { value:'PM' }, '🌙 Après-midi seulement (PM)')
+      )
+    ),
+
+    React.createElement('div', { className:'grid grid-cols-2 gap-3' },
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Début *'),
+        React.createElement('input', {
+          type: 'date',
+          value: newRecur.dateDebut,
+          required: true,
+          onChange: e => setNewRecur({ ...newRecur, dateDebut: e.target.value }),
+          className:'w-full px-3 py-2 border rounded text-sm'
+        })
+      ),
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Fin (vide = indéfini)'),
+        React.createElement('input', {
+          type: 'date',
+          value: newRecur.dateFin,
+          min: newRecur.dateDebut,
+          onChange: e => setNewRecur({ ...newRecur, dateFin: e.target.value }),
+          className:'w-full px-3 py-2 border rounded text-sm'
+        })
+      )
+    ),
+
+    React.createElement('div', { className:'flex gap-2' },
+      React.createElement('button', {
+        type: 'button',
+        onClick: ajouterRecurrence,
+        disabled: !newRecur.employe_id || !newRecur.dateDebut,
+        className:'flex-1 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white py-2 rounded font-medium transition'
+      }, editRecurId ? 'Modifier' : 'Enregistrer'),
+      React.createElement('button', {
+        type: 'button',
+        onClick: () => { setShowRecurForm(false); setNewRecur(emptyRecur); setEditRecurId(null); },
+        className:'px-4 bg-gray-100 hover:bg-gray-200 rounded transition'
+      }, 'Annuler')
+    )
+  );
+};
+
 const CongesApp = () => {
   const [currentUser,    setCurrentUser]    = useState(null);
   const [showRHLogin,    setShowRHLogin]    = useState(false);
@@ -402,11 +549,7 @@ const CongesApp = () => {
   };
 
   // ── Récurrences ────────────────────────────────────────────────────────────
-  const toggleJour = (list, day) =>
-    list.includes(day) ? list.filter(d => d !== day) : [...list, day];
-
-  const ajouterRecurrence = async (e) => {
-    e.preventDefault();
+  const ajouterRecurrence = async () => {
     setSaveError('');
     try {
       await saveRecurrence(newRecur, editRecurId);
@@ -487,142 +630,6 @@ const CongesApp = () => {
   };
 
   const monthName = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-
-  // ── Sous-composant : formulaire récurrence ─────────────────────────────────
-  const FormulaireRecurrence = () =>
-    React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4 border-l-4 border-yellow-400' },
-      React.createElement('h2', { className:'font-bold text-lg flex items-center gap-2' },
-        '⏰', editRecurId ? 'Modifier la récurrence' : '+ Nouvelle récurrence'
-      ),
-
-      // Collaborateur
-      React.createElement('div', null,
-        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Collaborateur *'),
-        React.createElement('select', {
-          value: newRecur.employe_id, required: true,
-          onChange: e => setNewRecur({ ...newRecur, employe_id: e.target.value }),
-          className:'w-full px-3 py-2 border rounded text-sm'
-        },
-          React.createElement('option', { value:'' }, 'Sélectionner…'),
-          employes.map(e => React.createElement('option', { key:e.id, value:e.id }, e.nom))
-        )
-      ),
-
-      // Pattern
-      React.createElement('div', null,
-        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Type de récurrence *'),
-        React.createElement('select', {
-          value: newRecur.pattern,
-          onChange: e => setNewRecur({ ...newRecur, pattern: e.target.value }),
-          className:'w-full px-3 py-2 border rounded text-sm'
-        },
-          React.createElement('option', { value:'weekly' },   'Toutes les semaines'),
-          React.createElement('option', { value:'biweekly' }, 'Semaines paires / impaires')
-        )
-      ),
-
-      // Jours — weekly
-      newRecur.pattern === 'weekly' && React.createElement('div', null,
-        React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Jours actifs *'),
-        React.createElement('div', { className:'flex flex-wrap gap-2' },
-          JOURS_SEMAINE.map(j =>
-            React.createElement('button', {
-              key: j.value, type:'button',
-              onClick: () => setNewRecur({ ...newRecur, jours: toggleJour(newRecur.jours, j.value) }),
-              className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
-                newRecur.jours.includes(j.value)
-                  ? 'bg-yellow-400 border-yellow-500 text-white'
-                  : 'bg-white border-gray-300 text-gray-600'
-              }`
-            }, j.label)
-          )
-        )
-      ),
-
-      // Jours — biweekly
-      newRecur.pattern === 'biweekly' && React.createElement('div', { className:'space-y-3' },
-        React.createElement('div', null,
-          React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines PAIRES'),
-          React.createElement('div', { className:'flex flex-wrap gap-2' },
-            JOURS_SEMAINE.map(j =>
-              React.createElement('button', {
-                key: j.value, type:'button',
-                onClick: () => setNewRecur({ ...newRecur, joursP: toggleJour(newRecur.joursP, j.value) }),
-                className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
-                  newRecur.joursP.includes(j.value)
-                    ? 'bg-blue-400 border-blue-500 text-white'
-                    : 'bg-white border-gray-300 text-gray-600'
-                }`
-              }, j.label)
-            )
-          )
-        ),
-        React.createElement('div', null,
-          React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines IMPAIRES'),
-          React.createElement('div', { className:'flex flex-wrap gap-2' },
-            JOURS_SEMAINE.map(j =>
-              React.createElement('button', {
-                key: j.value, type:'button',
-                onClick: () => setNewRecur({ ...newRecur, joursI: toggleJour(newRecur.joursI, j.value) }),
-                className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
-                  newRecur.joursI.includes(j.value)
-                    ? 'bg-purple-400 border-purple-500 text-white'
-                    : 'bg-white border-gray-300 text-gray-600'
-                }`
-              }, j.label)
-            )
-          )
-        )
-      ),
-
-      // Demi-journée
-      React.createElement('div', null,
-        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Demi-journée (optionnel)'),
-        React.createElement('select', {
-          value: newRecur.demi_journee,
-          onChange: e => setNewRecur({ ...newRecur, demi_journee: e.target.value }),
-          className:'w-full px-3 py-2 border rounded text-sm'
-        },
-          React.createElement('option', { value:'' }, 'Journée entière'),
-          React.createElement('option', { value:'AM' }, '☀️ Matin seulement (AM)'),
-          React.createElement('option', { value:'PM' }, '🌙 Après-midi seulement (PM)')
-        )
-      ),
-
-      // Dates
-      React.createElement('div', { className:'grid grid-cols-2 gap-3' },
-        React.createElement('div', null,
-          React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Début *'),
-          React.createElement('input', {
-            type:'date', value:newRecur.dateDebut, required:true,
-            onChange: e => setNewRecur({ ...newRecur, dateDebut: e.target.value }),
-            className:'w-full px-3 py-2 border rounded text-sm'
-          })
-        ),
-        React.createElement('div', null,
-          React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Fin (vide = indéfini)'),
-          React.createElement('input', {
-            type:'date', value:newRecur.dateFin, min:newRecur.dateDebut,
-            onChange: e => setNewRecur({ ...newRecur, dateFin: e.target.value }),
-            className:'w-full px-3 py-2 border rounded text-sm'
-          })
-        )
-      ),
-
-      // Boutons
-      React.createElement('div', { className:'flex gap-2' },
-        React.createElement('button', {
-          onClick: ajouterRecurrence,
-          disabled: !newRecur.employe_id || !newRecur.dateDebut,
-          className:'flex-1 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white py-2 rounded font-medium transition'
-        }, editRecurId ? 'Modifier' : 'Enregistrer'),
-        React.createElement('button', {
-          type:'button',
-          onClick: () => { setShowRecurForm(false); setNewRecur(emptyRecur); setEditRecurId(null); },
-          className:'px-4 bg-gray-100 hover:bg-gray-200 rounded transition'
-        }, 'Annuler')
-      )
-    );
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return React.createElement('div', { className:'min-h-screen bg-gray-50 flex items-center justify-center' },
@@ -781,7 +788,12 @@ const CongesApp = () => {
       rhPage === 'récurrences' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
         React.createElement('div', { className:'col-span-1' },
           showRecurForm
-            ? React.createElement(FormulaireRecurrence)
+            ? React.createElement(FormulaireRecurrence, {
+                newRecur, setNewRecur, emptyRecur,
+                editRecurId, setEditRecurId,
+                setShowRecurForm, employes,
+                ajouterRecurrence, saveError,
+              })
             : React.createElement('button', {
                 onClick:()=>setShowRecurForm(true),
                 className:'w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2'
