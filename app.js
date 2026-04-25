@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.6.1";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -204,7 +204,7 @@ const saveRecurrence = async (rec, editId = null) => {
 const expandRecurrence = (rec, year, month) => {
   const results = [];
   const debut  = new Date(rec.dateDebut);
-  const fin    = rec.dateFin ? new Date(rec.dateFin) : new Date(year, month + 3, 0); // défaut : +3 mois
+  const fin    = rec.dateFin ? new Date(rec.dateFin) : new Date(year, month + 1, 0); // pas de fin = jusqu'à la fin du mois affiché
 
   // Premier et dernier jour du mois demandé
   const moisDebut = new Date(year, month, 1);
@@ -455,7 +455,27 @@ const MiniPie=({congesDuJour})=>{
   return React.createElement('svg',{viewBox:'0 0 100 100',style:{display:'block',width:'100%',height:'100%'}},...elems);
 };
 
-const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,moisBase})=>{
+const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,moisBase,selectedRanges,setSelectedRanges,dragStart,setDragStart,dragEnd,setDragEnd,onDateSelect})=>{
+  const sr=selectedRanges||[],setSr=setSelectedRanges||function(){};
+  const isSelectable=!!setSelectedRanges;
+  const inRange=(d,a,b)=>{if(!a)return false;const lo=a<=( b||a)?a:(b||a),hi=a<=(b||a)?(b||a):a;return d>=lo&&d<=hi;};
+  const isSelected=d=>sr.some(r=>inRange(d,r.start,r.end));
+  const isDragging=d=>isSelectable&&!!dragStart&&inRange(d,dragStart,dragEnd);
+  const handleMouseDown=(d,occ)=>{
+    if(!isSelectable)return;
+    if(occ&&!window.confirm('Ce jour est déjà occupé. Sélectionner quand même ?'))return;
+    setDragStart(d);setDragEnd(d);
+  };
+  const handleMouseEnter=d=>{if(isSelectable&&dragStart)setDragEnd(d);};
+  const handleMouseUp=d=>{
+    if(!isSelectable||!dragStart)return;
+    const s=dragStart<=(dragEnd||dragStart)?dragStart:(dragEnd||dragStart);
+    const e2=dragStart<=(dragEnd||dragStart)?(dragEnd||dragStart):dragStart;
+    const idx=sr.findIndex(r=>r.start===s&&r.end===e2);
+    if(idx>=0)setSr(sr.filter((_,i)=>i!==idx));
+    else{const nr=[...sr,{start:s,end:e2}];setSr(nr);if(onDateSelect)onDateSelect(s,e2);}
+    setDragStart(null);setDragEnd(null);
+  };
   const MN=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   const DN=['L','M','M','J','V','S','D'],today=new Date();
   const cellBg=t=>{if(!t)return null;const s=t.toLowerCase();if(s.includes('maladie'))return'#fed7aa';if(s.includes('partiel'))return'#fef08a';return'#bfdbfe';};
@@ -472,11 +492,21 @@ const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,mo
     return React.createElement('div',{key:year+'-'+month,style:{minWidth:0}},
       React.createElement('div',{style:{textAlign:'center',fontWeight:'700',fontSize:'11px',marginBottom:'4px',color:'#1e40af'}},MN[month]+' '+year),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'}},DN.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'8px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280'}},d))),
-      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px'}},
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',userSelect:'none'}},
         cells.map((d,i)=>{
           if(!d)return React.createElement('div',{key:'e'+i});
-          const type=dm[ds(d)];
-          return React.createElement('div',{key:d,title:type||'',style:{textAlign:'center',fontSize:'9px',fontWeight:type?'700':'400',padding:'4px 1px',borderRadius:'3px',background:type?cellBg(type):(isT(d)?'#d1fae5':'#f3f4f6'),border:isT(d)?'2px solid #34d399':'1px solid #e5e7eb',color:type?'#1f2937':'#9ca3af',lineHeight:'1'}},d);
+          const dateStr=ds(d),type=dm[dateStr];
+          const sel=isSelected(dateStr),drag=isDragging(dateStr);
+          const bg=drag?'#bbf7d0':sel?'#86efac':type?cellBg(type):isT(d)?'#d1fae5':'#f3f4f6';
+          const brd=drag||sel?'2px solid #16a34a':isT(d)?'2px solid #34d399':'1px solid #e5e7eb';
+          const col=drag||sel?'#14532d':type?'#1f2937':isT(d)?'#065f46':'#9ca3af';
+          return React.createElement('div',{
+            key:d,title:sel?'Sélectionné':(type||''),
+            style:{textAlign:'center',fontSize:'9px',fontWeight:(sel||drag||type)?'700':'400',padding:'4px 1px',borderRadius:'3px',background:bg,border:brd,color:col,lineHeight:'1',cursor:isSelectable?'pointer':'default',transition:'background .1s'},
+            onMouseDown:isSelectable?(ev)=>{ev.preventDefault();handleMouseDown(dateStr,!!type);}:undefined,
+            onMouseEnter:isSelectable?()=>handleMouseEnter(dateStr):undefined,
+            onMouseUp:isSelectable?()=>handleMouseUp(dateStr):undefined,
+          },d);
         })));
   };
   const renderT=(year,month)=>{
@@ -505,11 +535,23 @@ const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,mo
       React.createElement('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}},legende)
     ),
     renderT(y0,m0));
-  return React.createElement('div',{className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-blue-400'},
-    React.createElement('div',{style:{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'}},
-      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Agenda'),
+  return React.createElement('div',{
+    className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-blue-400',
+    onMouseUp:()=>{
+      if(dragStart){
+        const s=dragStart<=(dragEnd||dragStart)?dragStart:(dragEnd||dragStart);
+        const e2=dragStart<=(dragEnd||dragStart)?(dragEnd||dragStart):dragStart;
+        const exists=sr.findIndex(r=>r.start===s&&r.end===e2);
+        if(exists<0){const nr=[...sr,{start:s,end:e2}];setSr(nr);if(onDateSelect)onDateSelect(s,e2);}
+        setDragStart(null);setDragEnd(null);
+      }
+    }
+  },
+    React.createElement('div',{style:{display:'flex',gap:'8px',marginBottom:'4px',flexWrap:'wrap',alignItems:'center'}},
+      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Agenda — cliquer ou glisser pour sélectionner'),
       React.createElement('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}},legende)
     ),
+    React.createElement('p',{style:{fontSize:'10px',color:'#9ca3af',marginBottom:'6px'}},'🟩 sélectionné  •  clic = 1 jour  •  glisser = plage  •  recliquer = désélectionner'),
     React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'16px'}},m4.map(({y,m})=>renderI(y,m))));
 };
 
@@ -533,6 +575,9 @@ const CongesApp = () => {
 
   // Formulaire congé ponctuel
   const [newConge, setNewConge] = useState({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
+  const [selectedRanges, setSelectedRanges] = useState([]);
+  const [dragStart, setDragStart] = useState(null);
+  const [dragEnd, setDragEnd] = useState(null);
 
   // Formulaire récurrence
   const emptyRecur = { employe_id:'', pattern:'weekly', jours:[], joursP:[], joursI:[], dateDebut:'', dateFin:'', demi_journee:'' };
@@ -679,10 +724,17 @@ const CongesApp = () => {
   const ajouterConge = async (e) => {
     e.preventDefault();
     setSaveError('');
-    const { employe_id, dateDebut, dateFin, type } = newConge;
+    const { employe_id, type } = newConge;
     const emp = employes.find(e => e.id === employe_id);
     const nomEmp = emp ? emp.nom : employe_id;
-    const finEff = dateFin || dateDebut;
+    const plages = selectedRanges.length > 0
+      ? selectedRanges.map(r=>({dateDebut:r.start,dateFin:r.end}))
+      : [{dateDebut:newConge.dateDebut, dateFin:newConge.dateFin||newConge.dateDebut}];
+    if(!plages[0].dateDebut){ setSaveError('Sélectionnez au moins un jour'); return; }
+    let errored=false;
+    for(const plage of plages){
+      const { dateDebut, dateFin } = plage;
+      const finEff = dateFin || dateDebut;
 
     if (type === 'Maladie') {
       const normaux = getChevauchements(employe_id, dateDebut, finEff, 'Congé');
@@ -738,11 +790,15 @@ const CongesApp = () => {
 
     pushUndo('Ajout ' + type + ' — ' + nomEmp);
     try {
-      await saveConge(newConge);
+      await saveConge({...newConge, dateDebut, dateFin:finEff});
+    } catch (err) { setSaveError(err.message); errored=true; }
+    }
+    if(!errored){
       chargerDonnees();
-      setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
-      alert('Congé ajouté ✓');
-    } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
+      setNewConge(prev=>({...prev,dateDebut:'',dateFin:''}));
+      setSelectedRanges([]); setDragStart(null); setDragEnd(null);
+      alert(plages.length>1?plages.length+' congés ajoutés ✓':'Congé ajouté ✓');
+    }
   };
 
   const supprimerConge = (id) => {
@@ -904,7 +960,7 @@ const CongesApp = () => {
             React.createElement('h2', { className:'font-bold text-lg' }, '+ Absence ponctuelle'),
             saveError && React.createElement('div', { className:'bg-red-50 border border-red-300 text-red-700 rounded p-2 text-xs' }, saveError),
             React.createElement('select', {
-              value:newConge.employe_id, onChange:e=>setNewConge({...newConge,employe_id:e.target.value}),
+              value:newConge.employe_id, onChange:e=>{ setNewConge({...newConge,employe_id:e.target.value,dateDebut:'',dateFin:''}); setSelectedRanges([]); setDragStart(null); setDragEnd(null); },
               className:'w-full px-3 py-2 border rounded text-sm'
             },
               React.createElement('option',{value:''},'Tous'),
@@ -932,10 +988,20 @@ const CongesApp = () => {
               React.createElement('label',{className:'block text-xs text-gray-500 mb-1'},'Date fin (vide = 1 jour)'),
               React.createElement('input',{type:'date',value:newConge.dateFin,min:newConge.dateDebut,onChange:e=>setNewConge({...newConge,dateFin:e.target.value}),className:'w-full px-3 py-2 border rounded text-sm'})
             ),
+            selectedRanges.length > 0 && React.createElement('div',{className:'bg-green-50 border border-green-300 rounded p-2 text-xs text-green-800'},
+              React.createElement('p',{className:'font-bold mb-1'},'📅 '+selectedRanges.length+' plage(s) :'),
+              selectedRanges.map((r,i)=>React.createElement('p',{key:i},'• '+r.start+(r.end!==r.start?' → '+r.end:'')))  
+            ),
             React.createElement('button', {
-              onClick:ajouterConge, disabled:!newConge.employe_id||!newConge.dateDebut,
+              onClick:ajouterConge,
+              disabled:!newConge.employe_id||(selectedRanges.length===0&&!newConge.dateDebut),
               className:'w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded transition'
-            }, 'Ajouter')
+            }, selectedRanges.length>1?'Ajouter '+selectedRanges.length+' plages':'Ajouter'),
+            selectedRanges.length > 0 && React.createElement('button',{
+              type:'button',
+              onClick:()=>{ setSelectedRanges([]); setNewConge(p=>({...p,dateDebut:'',dateFin:''})); },
+              className:'w-full bg-gray-100 hover:bg-gray-200 text-gray-600 py-1 rounded text-xs'
+            },'✕ Effacer la sélection')
           )
         ),
 
@@ -944,7 +1010,12 @@ const CongesApp = () => {
           congesJours: congesJours,
           joursRecurrents: joursRecurrents,
           tousLesJours: tousLesJours,
-          moisBase: new Date()
+          moisBase: new Date(),
+          selectedRanges: selectedRanges,
+          setSelectedRanges: setSelectedRanges,
+          dragStart: dragStart, setDragStart: setDragStart,
+          dragEnd: dragEnd, setDragEnd: setDragEnd,
+          onDateSelect: (s,e)=>setNewConge(prev=>({...prev,dateDebut:s,dateFin:e}))
         }),
 
         React.createElement('div', { className:'col-span-2 space-y-6' },
