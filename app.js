@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.3.1";
+const APP_VERSION = "2.3.2";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -613,7 +613,7 @@ const CongesApp = () => {
     const finEff = dateFin || dateDebut;
 
     if (type === 'Maladie') {
-      const normaux = getChevauchements(employe_id, dateDebut, finEff, 'Conge');
+      const normaux = getChevauchements(employe_id, dateDebut, finEff, 'Congé');
       if (normaux.length > 0) {
         const listing = normaux.map(cx =>
           '• ' + (cx.dateDebut || cx.date) + ' → ' + (cx.dateFin || cx.date) + ' (' + (cx.nbJours || 1) + ' jour(s))'
@@ -631,7 +631,7 @@ const CongesApp = () => {
       }
     }
 
-    if (type === 'Conge') {
+    if (type === 'Congé') {
       const recs = getRecurrencesChevauchement(employe_id, dateDebut, finEff);
       if (recs.length > 0) {
         const listing = recs.map(rec => {
@@ -650,7 +650,7 @@ const CongesApp = () => {
     try {
       await saveConge(newConge);
       chargerDonnees();
-      setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Conge', demi_journee:'' });
+      setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
       alert('Congé ajouté ✓');
     } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
   };
