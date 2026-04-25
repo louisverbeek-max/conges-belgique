@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.2.3";
+const APP_VERSION = "2.2.4";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -737,7 +737,7 @@ const CongesApp = () => {
                         React.createElement('p',{className:'font-medium text-sm'},a.employe.nom),
                         React.createElement('p',{className:'text-xs text-gray-600'},
                           a.demi_journee ? `${a.type} (${a.demi_journee})` : a.type,
-                          a.isRecurrent ? ' 🔁' : ''
+                          a.isRecurrent ? ' ⏰' : ''
                         )
                       )
                     );
@@ -748,7 +748,7 @@ const CongesApp = () => {
               React.createElement('div', { className:'space-y-2 text-sm' },
                 React.createElement('p', null, `👥 Collaborateurs : ${employes.length}`),
                 React.createElement('p', null, `📋 Congés ponctuels : ${conges.length}`),
-                React.createElement('p', null, `🔁 Récurrences actives : ${recurrences.length}`),
+                React.createElement('p', null, `⏰ Temps partiels actifs : ${recurrences.length}`),
                 React.createElement('p', null, `🏠 Absents aujourd'hui : ${getTodayAbsents().length}`)
               )
             )
@@ -822,8 +822,8 @@ const CongesApp = () => {
                           React.createElement('p',{className:'font-medium text-sm'},emp?.nom??rec.employe_id),
                           React.createElement('p',{className:'text-xs text-gray-600 mt-1'},
                             rec.pattern==='weekly'
-                              ? `🔁 Hebdo : ${jourLabels(rec.jours)}`
-                              : `🔁 Paires : ${jourLabels(rec.joursP)} | Impaires : ${jourLabels(rec.joursI)}`
+                              ? `⏰ Hebdo : ${jourLabels(rec.jours)}`
+                              : `⏰ Paires : ${jourLabels(rec.joursP)} | Impaires : ${jourLabels(rec.joursI)}`
                           ),
                           rec.demi_journee && React.createElement('p',{className:'text-xs text-gray-500'},
                             rec.demi_journee==='AM' ? '☀️ Matin seulement' : '🌙 Après-midi seulement'
@@ -912,8 +912,8 @@ const CongesApp = () => {
             cfg.icon, ' ', type
           )
         ),
-        React.createElement('div', { className:'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600' },
-          '🔁 Récurrent'
+        React.createElement('div', { className:'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700' },
+          '⏰ Temps partiel'
         )
       ),
 
@@ -930,7 +930,7 @@ const CongesApp = () => {
                 React.createElement('span',null,cfg.icon),
                 React.createElement('div',null,
                   React.createElement('p',{className:'font-medium text-sm'},
-                    a.employe.nom, a.isRecurrent ? ' 🔁' : ''
+                    a.employe.nom, a.isRecurrent ? ' ⏰' : ''
                   ),
                   React.createElement('p',{className:`text-xs ${cfg.text}`},
                     a.demi_journee
