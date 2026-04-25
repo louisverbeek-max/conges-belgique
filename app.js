@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.2.2";
+const APP_VERSION = "2.2.3";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -36,7 +36,7 @@ const getTypeConfig = (type) => {
   if (!type) return TYPES_CONFIG['Congé'];
   const t = type.toString().trim().toLowerCase();
   if (t.includes('maladie')) return TYPES_CONFIG['Maladie'];
-  if (t.includes('partiel')) return TYPES_CONFIG['Temps partiel'];
+  if (t.includes('partiel')) return { color: 'bg-yellow-100', border: 'border-yellow-400', icon: '⏰', text: 'text-yellow-700' };
   return TYPES_CONFIG['Congé'];
 };
 
@@ -49,7 +49,7 @@ const getTypeColor = (type) => {
   if (!type) return TYPE_COLORS['default'];
   const t = type.toString().trim().toLowerCase();
   if (t.includes('maladie')) return TYPE_COLORS['Maladie'];
-  if (t.includes('partiel')) return TYPE_COLORS['Temps partiel'];
+  if (t.includes('partiel')) return '#eab308';
   return TYPE_COLORS['Conge'];
 };
 
