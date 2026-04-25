@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.1";
+const APP_VERSION = "2.6.2";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -455,7 +455,7 @@ const MiniPie=({congesDuJour})=>{
   return React.createElement('svg',{viewBox:'0 0 100 100',style:{display:'block',width:'100%',height:'100%'}},...elems);
 };
 
-const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,moisBase,selectedRanges,setSelectedRanges,dragStart,setDragStart,dragEnd,setDragEnd,onDateSelect})=>{
+const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,recurrences:recurrencesProp,tousLesJours,moisBase,selectedRanges,setSelectedRanges,dragStart,setDragStart,dragEnd,setDragEnd,onDateSelect})=>{
   const sr=selectedRanges||[],setSr=setSelectedRanges||function(){};
   const isSelectable=!!setSelectedRanges;
   const inRange=(d,a,b)=>{if(!a)return false;const lo=a<=( b||a)?a:(b||a),hi=a<=(b||a)?(b||a):a;return d>=lo&&d<=hi;};
@@ -488,7 +488,12 @@ const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,mo
   };
   const renderI=(year,month)=>{
     const {cells,isT,ds}=mkG(year,month),dm={};
-    [...congesJours,...joursRecurrents].forEach(j=>{if(j.employe_id!==employe_id||!j.date)return;const[y,m]=j.date.split('-').map(Number);if(y===year&&m===month+1)dm[j.date]=j.type||'Congé';});
+    // Récurrences recalculées pour ce mois précis
+    const recJoursMois=(recurrencesProp||[]).flatMap(rec=>{
+      if(rec.employe_id!==employe_id)return[];
+      return expandRecurrence(rec,year,month).map(d=>({...d,employe_id:rec.employe_id,type:'Temps partiel'}));
+    });
+    [...congesJours,...recJoursMois].forEach(j=>{if(j.employe_id!==employe_id||!j.date)return;const[y,m]=j.date.split('-').map(Number);if(y===year&&m===month+1)dm[j.date]=j.type||'Congé';});
     return React.createElement('div',{key:year+'-'+month,style:{minWidth:0}},
       React.createElement('div',{style:{textAlign:'center',fontWeight:'700',fontSize:'11px',marginBottom:'4px',color:'#1e40af'}},MN[month]+' '+year),
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'}},DN.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'8px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280'}},d))),
@@ -836,9 +841,17 @@ const CongesApp = () => {
   const getFirstDayOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1).getDay();
 
   // Jours générés par les récurrences pour le mois affiché
+  // Calcule les jours récurrents pour une plage de mois
+  // On couvre moisActuel + 5 mois suivants (pour l'agenda 4 mois + vue fin de mois)
   const joursRecurrents = recurrences.flatMap(rec => {
-    const days = expandRecurrence(rec, moisActuel.getFullYear(), moisActuel.getMonth());
-    return days.map(d => ({
+    const allDays = [];
+    for(let offset=0; offset<=5; offset++){
+      const y = moisActuel.getFullYear() + Math.floor((moisActuel.getMonth()+offset)/12);
+      const m = (moisActuel.getMonth()+offset) % 12;
+      const days = expandRecurrence(rec, y, m);
+      allDays.push(...days);
+    }
+    return allDays.map(d => ({
       ...d,
       employe_id: rec.employe_id,
       type: 'Temps partiel',
@@ -1010,6 +1023,7 @@ const CongesApp = () => {
           congesJours: congesJours,
           joursRecurrents: joursRecurrents,
           tousLesJours: tousLesJours,
+          recurrences: recurrences,
           moisBase: new Date(),
           selectedRanges: selectedRanges,
           setSelectedRanges: setSelectedRanges,
@@ -1270,6 +1284,46 @@ const CongesApp = () => {
                 : React.createElement('div',{className:'flex-1'})
             );
           })
+        ),
+
+        // 2 semaines du mois suivant si on est après le 25
+        aujourd_hui.getDate() > 25 && moisActuel.getMonth()===aujourd_hui.getMonth() && moisActuel.getFullYear()===aujourd_hui.getFullYear() &&
+        React.createElement('div', { className:'mt-4' },
+          React.createElement('div', { className:'flex justify-between items-center mb-3' },
+            React.createElement('h3', { className:'text-sm font-semibold text-gray-500' },
+              '14 premiers jours — '+['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][(moisActuel.getMonth()+1)%12]+' '+(moisActuel.getMonth()===11?moisActuel.getFullYear()+1:moisActuel.getFullYear())
+            )
+          ),
+          React.createElement('div',{className:'grid grid-cols-7 gap-2 mb-2'},
+            ['L','M','M','J','V','S','D'].map((d,i)=>React.createElement('div',{key:i,className:'text-center font-bold py-1 text-xs text-gray-400'},d))
+          ),
+          React.createElement('div',{className:'grid grid-cols-7 gap-2'},
+            (()=>{
+              const nY = moisActuel.getMonth()===11 ? moisActuel.getFullYear()+1 : moisActuel.getFullYear();
+              const nM = (moisActuel.getMonth()+1) % 12;
+              const firstDow = new Date(nY,nM,1).getDay();
+              const offset = firstDow===0?6:firstDow-1;
+              const cells = [];
+              for(let i=0;i<offset;i++) cells.push(null);
+              for(let d=1;d<=14;d++) cells.push(d);
+              return cells.map((d,i)=>{
+                if(!d) return React.createElement('div',{key:'ne'+i});
+                const ds = nY+'-'+String(nM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+                const absNxt = tousLesJours.filter(j=>j.date===ds);
+                const fmt = String(d).padStart(2,'0')+'/'+String(nM+1).padStart(2,'0');
+                return React.createElement('div',{
+                  key:d,
+                  onClick:()=>{ setMoisActuel(new Date(nY,nM,1)); setJourAffiche(d); },
+                  className:'aspect-square rounded border-2 flex flex-col cursor-pointer overflow-hidden bg-gray-50 border-gray-200 opacity-80',
+                },
+                  React.createElement('span',{className:'text-xs font-bold text-gray-500 px-1 pt-1 shrink-0'},fmt),
+                  absNxt.length>0
+                    ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(PieDisc,{congesDuJour:absNxt}))
+                    : React.createElement('div',{className:'flex-1'})
+                );
+              });
+            })()
+          )
         )
       )
     )
