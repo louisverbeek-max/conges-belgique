@@ -1,45 +1,22 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.1.2";
+const APP_VERSION = "2.2.0";
 
 // ===== FIREBASE CONFIG =====
-// Vos paramètres d'origine — inchangés
-const FIREBASE_URL = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
-const FIREBASE_API_KEY = "AIzaSyBphnA1yYQpGLd66yuReFK7dgwoIsgLwGE";
+const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
+const FIREBASE_API_KEY  = "AIzaSyBphnA1yYQpGLd66yuReFK7dgwoIsgLwGE";
+const getFirebaseUrl    = (path) => `${FIREBASE_URL}${path}.json?auth=${FIREBASE_API_KEY}`;
 
 // ===== HELPERS FIREBASE =====
-
-/**
- * Construit l'URL Firebase avec auth.
- * Identique à l'original — conservé tel quel.
- */
-const getFirebaseUrl = (path) => `${FIREBASE_URL}${path}.json?auth=${FIREBASE_API_KEY}`;
-
-/**
- * Génère un ID sans point ni caractère interdit par Firebase (. # $ [ ]).
- *
- * CORRECTION BUG v2.0.0 :
- *   Math.random() produisait "conge_1714123456789_0.7234…"
- *   Le point dans l'ID est interdit par Firebase → erreur 400 sur CHAQUE PUT.
- *   toString(36) encode en base-36 (chiffres + lettres a-z) : jamais de point.
- */
 const generateId = (prefix = 'id') => {
   const ts   = Date.now().toString(36);
   const rand = Math.random().toString(36).substr(2, 8);
   return `${prefix}_${ts}_${rand}`;
 };
 
-/**
- * Wrapper fetch unifié :
- *   - Ajoute Content-Type: application/json (absent dans v2.0.0)
- *   - Lit le body d'erreur Firebase pour un message clair
- */
 const firebaseFetch = async (path, method = 'GET', body = null) => {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body !== null) opts.body = JSON.stringify(body);
   const res = await fetch(getFirebaseUrl(path), opts);
   if (!res.ok) {
@@ -51,46 +28,25 @@ const firebaseFetch = async (path, method = 'GET', body = null) => {
 };
 
 // ===== TYPES & COULEURS =====
-// Identiques à l'original Haiku
 const TYPES_CONFIG = {
-  'Congé':       { color: 'bg-blue-100',   border: 'border-blue-400',   icon: '🏖️', text: 'text-blue-700'   },
-  'Maladie':     { color: 'bg-orange-100', border: 'border-orange-400', icon: '🤒', text: 'text-orange-700' },
+  'Congé':        { color: 'bg-blue-100',   border: 'border-blue-400',   icon: '🏖️', text: 'text-blue-700'   },
+  'Maladie':      { color: 'bg-orange-100', border: 'border-orange-400', icon: '🤒', text: 'text-orange-700' },
   'Temps partiel':{ color: 'bg-yellow-100', border: 'border-yellow-400', icon: '⏰', text: 'text-yellow-700' },
 };
-
 const getTypeConfig = (type) => {
   if (!type) return TYPES_CONFIG['Congé'];
-  const t = type.toString().trim();
-  if (t.toLowerCase().includes('maladie')) return TYPES_CONFIG['Maladie'];
-  if (t.toLowerCase().includes('partiel')) return TYPES_CONFIG['Temps partiel'];
+  const t = type.toString().trim().toLowerCase();
+  if (t.includes('maladie')) return TYPES_CONFIG['Maladie'];
+  if (t.includes('partiel')) return TYPES_CONFIG['Temps partiel'];
   return TYPES_CONFIG['Congé'];
 };
 
-// ===== ICÔNES SVG (identiques à l'original) =====
-const ChevronLeft  = () => React.createElement('svg', { width:24, height:24, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('polyline', { points:'15 18 9 12 15 6' }));
-const ChevronRight = () => React.createElement('svg', { width:24, height:24, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('polyline', { points:'9 18 15 12 9 6' }));
-const LogOut       = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('path', { d:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }), React.createElement('polyline', { points:'16 17 21 12 16 7' }), React.createElement('line', { x1:21, y1:12, x2:9, y2:12 }));
-const Lock         = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('rect', { x:3, y:11, width:18, height:11, rx:2, ry:2 }), React.createElement('path', { d:'M7 11V7a5 5 0 0 1 10 0v4' }));
-
-// ===== COMPOSANT DISQUE CAMEMBERT =====
-/**
- * Disque SVG proportionnel au nombre d'absents.
- *   - 1 seul type  → disque uni coloré
- *   - Types mixtes → secteurs proportionnels (camembert)
- *   - Taille : 20px (1 absent) → 38px (6+ absents), chiffre blanc au centre
- *
- * Couleurs hex extraites des classes Tailwind des TYPES_CONFIG :
- *   Congé         → #3b82f6 (blue-500)
- *   Maladie       → #f97316 (orange-500)
- *   Temps partiel → #eab308 (yellow-500)
- */
 const TYPE_COLORS = {
   'Conge':        '#3b82f6',
   'Maladie':      '#f97316',
   'Temps partiel':'#eab308',
   'default':      '#6b7280',
 };
-
 const getTypeColor = (type) => {
   if (!type) return TYPE_COLORS['default'];
   const t = type.toString().trim().toLowerCase();
@@ -99,10 +55,24 @@ const getTypeColor = (type) => {
   return TYPE_COLORS['Conge'];
 };
 
-/**
- * Calcule le path d'un secteur de camembert.
- * Angles en degrés, 0 = sommet (12h).
- */
+// ===== JOURS =====
+const JOURS_SEMAINE = [
+  { value: 1, label: 'Lun' },
+  { value: 2, label: 'Mar' },
+  { value: 3, label: 'Mer' },
+  { value: 4, label: 'Jeu' },
+  { value: 5, label: 'Ven' },
+  { value: 6, label: 'Sam' },
+  { value: 0, label: 'Dim' },
+];
+
+// ===== ICÔNES SVG =====
+const ChevronLeft  = () => React.createElement('svg', { width:24, height:24, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('polyline', { points:'15 18 9 12 15 6' }));
+const ChevronRight = () => React.createElement('svg', { width:24, height:24, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('polyline', { points:'9 18 15 12 9 6' }));
+const LogOut       = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('path', { d:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }), React.createElement('polyline', { points:'16 17 21 12 16 7' }), React.createElement('line', { x1:21, y1:12, x2:9, y2:12 }));
+const Lock         = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('rect', { x:3, y:11, width:18, height:11, rx:2, ry:2 }), React.createElement('path', { d:'M7 11V7a5 5 0 0 1 10 0v4' }));
+
+// ===== COMPOSANT DISQUE CAMEMBERT (Option C) =====
 const describeArc = (cx, cy, r, startAngle, endAngle) => {
   const toRad = (deg) => (deg - 90) * Math.PI / 180;
   const x1 = cx + r * Math.cos(toRad(startAngle));
@@ -113,125 +83,205 @@ const describeArc = (cx, cy, r, startAngle, endAngle) => {
   return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 };
 
+/**
+ * Disque camembert fixe (remplit la case).
+ * Si tous les absents du jour ont une demi_journee identique (AM ou PM),
+ * affiche un badge AM/PM en bas à droite (Option C).
+ */
 const PieDisc = ({ congesDuJour }) => {
   const total = congesDuJour.length;
-  // Taille fixe : le SVG utilise un viewBox 100x100 et s'étire
-  // via width/height 100% pour remplir le conteneur parent.
   const cx = 50, cy = 50, r = 48;
 
   // Compter par type
   const counts = {};
   congesDuJour.forEach(c => {
-    const key = c.type || 'Conge';
+    const key = c.type || 'Congé';
     counts[key] = (counts[key] || 0) + 1;
   });
   const types = Object.keys(counts);
 
-  // Disque uni si 1 seul type présent
+  // Badge AM/PM : affiché si TOUS les absents du jour ont la même demi_journee (AM ou PM)
+  const demiJournees = congesDuJour.map(c => c.demi_journee).filter(Boolean);
+  const tousPareil   = demiJournees.length === total && new Set(demiJournees).size === 1;
+  const badge        = tousPareil ? demiJournees[0] : null; // 'AM', 'PM', ou null
+
+  const svgContent = [];
+
   if (types.length === 1) {
-    return React.createElement('svg', {
-      viewBox: '0 0 100 100',
-      style: { display: 'block', width: '100%', height: '100%' },
-    },
-      React.createElement('circle', { cx, cy, r, fill: getTypeColor(types[0]) }),
-      React.createElement('text', {
-        x: cx, y: cy,
-        textAnchor: 'middle', dominantBaseline: 'central',
-        fill: 'white', fontWeight: 'bold',
-        fontSize: '34', fontFamily: 'sans-serif',
-      }, total)
-    );
+    svgContent.push(React.createElement('circle', { key:'c', cx, cy, r, fill: getTypeColor(types[0]) }));
+  } else {
+    let startAngle = 0;
+    types.forEach((type, i) => {
+      const slice    = (counts[type] / total) * 360;
+      const endAngle = startAngle + (slice >= 360 ? 359.99 : slice);
+      svgContent.push(React.createElement('path', { key:i, d: describeArc(cx, cy, r, startAngle, endAngle), fill: getTypeColor(type) }));
+      startAngle += slice;
+    });
   }
 
-  // Camembert multi-types
-  const sectors = [];
-  let startAngle = 0;
-  types.forEach((type, i) => {
-    const slice    = (counts[type] / total) * 360;
-    const endAngle = startAngle + (slice >= 360 ? 359.99 : slice);
-    sectors.push(
-      React.createElement('path', {
-        key: i,
-        d:    describeArc(cx, cy, r, startAngle, endAngle),
-        fill: getTypeColor(type),
-      })
+  // Chiffre blanc au centre
+  svgContent.push(React.createElement('text', {
+    key: 'txt', x: cx, y: cy,
+    textAnchor: 'middle', dominantBaseline: 'central',
+    fill: 'white', fontWeight: 'bold', fontSize: '34', fontFamily: 'sans-serif',
+  }, total));
+
+  // Badge AM/PM en surimpression SVG (coin bas-droite)
+  if (badge) {
+    svgContent.push(
+      React.createElement('rect', { key:'badge-bg', x:62, y:68, width:34, height:20, rx:4, fill:'#1f2937' }),
+      React.createElement('text', {
+        key:'badge-txt', x:79, y:78,
+        textAnchor:'middle', dominantBaseline:'central',
+        fill:'white', fontWeight:'bold', fontSize:'13', fontFamily:'sans-serif',
+      }, badge)
     );
-    startAngle += slice;
-  });
+  }
 
   return React.createElement('svg', {
     viewBox: '0 0 100 100',
     style: { display: 'block', width: '100%', height: '100%' },
-  },
-    ...sectors,
-    React.createElement('text', {
-      x: cx, y: cy,
-      textAnchor: 'middle', dominantBaseline: 'central',
-      fill: 'white', fontWeight: 'bold',
-      fontSize: '34', fontFamily: 'sans-serif',
-    }, total)
-  );
+  }, ...svgContent);
 };
 
-// ===== LOGIQUE CONGÉS =====
-
-/**
- * NOUVEAU en v2.1.0 :
- *   Stocke UN seul document Firebase par congé (plage dateDebut→dateFin).
- *   Structure : { employe_id, dateDebut, dateFin, type, nbJours, createdAt }
- *
- *   Avantages :
- *     • 1 seule requête au lieu de N (1 par jour) → plus aucun problème Promise.all
- *     • Pas d'ID avec point → plus d'erreur 400
- *     • Calculs légaux (jours fériés belges) centralisables côté lecture
- */
+// ===== LOGIQUE CONGÉS PONCTUELS =====
 const saveConge = async (conge) => {
-  const { employe_id, dateDebut, dateFin, type } = conge;
-  if (!employe_id || !dateDebut || !type) {
-    throw new Error('Champs obligatoires manquants : collaborateur, date début, type');
-  }
-  const debut = new Date(dateDebut);
-  const fin   = dateFin ? new Date(dateFin) : new Date(dateDebut);
+  const { employe_id, dateDebut, dateFin, type, demi_journee } = conge;
+  if (!employe_id || !dateDebut || !type) throw new Error('Champs obligatoires manquants');
+  const debut   = new Date(dateDebut);
+  const fin     = dateFin ? new Date(dateFin) : new Date(dateDebut);
   if (fin < debut) throw new Error('La date de fin doit être ≥ à la date de début');
-
   const nbJours = Math.round((fin - debut) / 86_400_000) + 1;
-  const congeId = generateId('conge');   // ← plus jamais de point dans l'ID
-
-  await firebaseFetch(`/conges/${congeId}`, 'PUT', {
+  const congeId = generateId('conge');
+  const payload = {
     employe_id,
     dateDebut:  debut.toISOString().split('T')[0],
     dateFin:    fin.toISOString().split('T')[0],
-    type,
-    nbJours,
+    type, nbJours,
     createdAt:  new Date().toISOString(),
-  });
+  };
+  if (demi_journee) payload.demi_journee = demi_journee;
+  await firebaseFetch(`/conges/${congeId}`, 'PUT', payload);
   return congeId;
 };
 
+// ===== LOGIQUE RÉCURRENCES =====
 /**
- * Normalise un congé Firebase vers un tableau de jours individuels
- * pour alimenter la vue calendrier — identique à l'original.
- *
- * Rétrocompatible :
- *   • Ancien format v2.0.0 : { date, employe_id, type }          → 1 jour
- *   • Nouveau format v2.1.0 : { dateDebut, dateFin, employe_id } → N jours
+ * Sauvegarde une règle de récurrence dans /recurrences/{id}.
+ * pattern: 'weekly' | 'biweekly'
+ * Pour 'weekly'   : jours = [1,3,5]
+ * Pour 'biweekly' : joursP = [1,3] (semaines paires), joursI = [1,3,5] (impaires)
+ * demi_journee: 'AM' | 'PM' | '' (journée entière)
  */
+const saveRecurrence = async (rec, editId = null) => {
+  const { employe_id, pattern, jours, joursP, joursI, dateDebut, dateFin, demi_journee } = rec;
+  if (!employe_id || !dateDebut || !pattern) throw new Error('Champs obligatoires manquants');
+  const id = editId || generateId('recur');
+  const payload = {
+    employe_id, pattern, dateDebut, dateFin: dateFin || '',
+    demi_journee: demi_journee || '',
+    createdAt: editId ? rec.createdAt : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  if (pattern === 'weekly')   payload.jours  = jours  || [];
+  if (pattern === 'biweekly') { payload.joursP = joursP || []; payload.joursI = joursI || []; }
+  await firebaseFetch(`/recurrences/${id}`, 'PUT', payload);
+  return id;
+};
+
+/**
+ * Génère la liste des dates (strings YYYY-MM-DD) couvertes par une récurrence
+ * pour un mois donné (année + mois 0-indexed).
+ * Numérotation semaine ISO : lundi=1 … dimanche=0.
+ */
+const expandRecurrence = (rec, year, month) => {
+  const results = [];
+  const debut  = new Date(rec.dateDebut);
+  const fin    = rec.dateFin ? new Date(rec.dateFin) : new Date(year, month + 3, 0); // défaut : +3 mois
+
+  // Premier et dernier jour du mois demandé
+  const moisDebut = new Date(year, month, 1);
+  const moisFin   = new Date(year, month + 1, 0);
+  const start     = debut > moisDebut ? debut : moisDebut;
+  const end       = fin   < moisFin   ? fin   : moisFin;
+
+  if (start > end) return results;
+
+  const cur = new Date(start);
+  while (cur <= end) {
+    const dow = cur.getDay(); // 0=dim, 1=lun … 6=sam
+
+    if (rec.pattern === 'weekly') {
+      if ((rec.jours || []).includes(dow)) {
+        results.push({ date: cur.toISOString().split('T')[0], demi_journee: rec.demi_journee || null });
+      }
+    } else if (rec.pattern === 'biweekly') {
+      // Numéro de semaine ISO
+      const thursday = new Date(cur);
+      thursday.setDate(cur.getDate() + (4 - (cur.getDay() || 7)));
+      const yearStart = new Date(thursday.getFullYear(), 0, 1);
+      const weekNum   = Math.ceil(((thursday - yearStart) / 86400000 + 1) / 7);
+      const isPaire   = weekNum % 2 === 0;
+      const joursActifs = isPaire ? (rec.joursP || []) : (rec.joursI || []);
+      if (joursActifs.includes(dow)) {
+        results.push({ date: cur.toISOString().split('T')[0], demi_journee: rec.demi_journee || null });
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return results;
+};
+
+// ===== NETTOYAGE AUTOMATIQUE (RH uniquement) =====
+/**
+ * Supprime de Firebase les congés ponctuels dont la dateFin est antérieure à M-2.
+ * Les récurrences dont la dateFin est antérieure à M-2 sont aussi supprimées.
+ */
+const nettoyerAnciensConges = async () => {
+  const limite = new Date();
+  limite.setMonth(limite.getMonth() - 2);
+  limite.setDate(1);
+  const limiteStr = limite.toISOString().split('T')[0];
+
+  try {
+    // Congés ponctuels
+    const congesData = await firebaseFetch('/conges').catch(() => null);
+    if (congesData) {
+      const suppressions = Object.entries(congesData)
+        .filter(([, v]) => {
+          const fin = v.dateFin || v.date || v.dateDebut || '';
+          return fin && fin < limiteStr;
+        })
+        .map(([id]) => firebaseFetch(`/conges/${id}`, 'DELETE'));
+      await Promise.all(suppressions);
+      if (suppressions.length > 0) console.log(`🧹 Nettoyage : ${suppressions.length} congé(s) supprimé(s)`);
+    }
+    // Récurrences terminées
+    const recurData = await firebaseFetch('/recurrences').catch(() => null);
+    if (recurData) {
+      const suppressionsR = Object.entries(recurData)
+        .filter(([, v]) => v.dateFin && v.dateFin < limiteStr)
+        .map(([id]) => firebaseFetch(`/recurrences/${id}`, 'DELETE'));
+      await Promise.all(suppressionsR);
+      if (suppressionsR.length > 0) console.log(`🧹 Nettoyage : ${suppressionsR.length} récurrence(s) supprimée(s)`);
+    }
+  } catch (err) {
+    console.warn('Nettoyage partiel :', err.message);
+  }
+};
+
+// ===== NORMALISATION DONNÉES =====
 const expandCongeToJours = (conge) => {
-  // Nouveau format : plage
   if (conge.dateDebut && conge.dateFin) {
     const jours = [];
     let cur = new Date(conge.dateDebut);
     const fin = new Date(conge.dateFin);
     while (cur <= fin) {
-      jours.push({
-        ...conge,
-        date: cur.toISOString().split('T')[0],
-      });
+      jours.push({ ...conge, date: cur.toISOString().split('T')[0] });
       cur.setDate(cur.getDate() + 1);
     }
     return jours;
   }
-  // Ancien format : jour unique (rétrocompatibilité)
   if (conge.date) return [conge];
   return [];
 };
@@ -244,46 +294,53 @@ const CongesApp = () => {
   const [rhLoginError,   setRhLoginError]   = useState('');
   const [rhPage,         setRhPage]         = useState('congés');
 
-  const [employes,  setEmployes]  = useState([]);
-  const [conges,    setConges]    = useState([]);   // documents Firebase bruts
-  const [congesJours, setCongesJours] = useState([]); // vue éclatée par jour
-  const [loading,   setLoading]   = useState(true);
-  const [saveError, setSaveError] = useState('');
+  const [employes,     setEmployes]     = useState([]);
+  const [conges,       setConges]       = useState([]);
+  const [congesJours,  setCongesJours]  = useState([]);
+  const [recurrences,  setRecurrences]  = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [saveError,    setSaveError]    = useState('');
 
   const [newCollaborateur, setNewCollaborateur] = useState('');
   const [editingId,        setEditingId]        = useState(null);
-  const [newConge, setNewConge] = useState({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé' });
+
+  // Formulaire congé ponctuel
+  const [newConge, setNewConge] = useState({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
+
+  // Formulaire récurrence
+  const emptyRecur = { employe_id:'', pattern:'weekly', jours:[], joursP:[], joursI:[], dateDebut:'', dateFin:'', demi_journee:'' };
+  const [newRecur,      setNewRecur]      = useState(emptyRecur);
+  const [editRecurId,   setEditRecurId]   = useState(null);
+  const [showRecurForm, setShowRecurForm] = useState(false);
 
   const aujourd_hui = new Date();
   const [moisActuel,  setMoisActuel]  = useState(new Date(aujourd_hui.getFullYear(), aujourd_hui.getMonth(), 1));
   const [jourAffiche, setJourAffiche] = useState(aujourd_hui.getDate());
 
-  // ── Chargement Firebase ────────────────────────────────────────────────────
+  // ── Chargement ────────────────────────────────────────────────────────────
   const chargerDonnees = useCallback(async () => {
     try {
-      const [empData, conData] = await Promise.all([
+      const [empData, conData, recData] = await Promise.all([
         firebaseFetch('/employes').catch(() => null),
         firebaseFetch('/conges').catch(() => null),
+        firebaseFetch('/recurrences').catch(() => null),
       ]);
 
-      if (empData) {
-        setEmployes(Object.entries(empData).map(([key, value]) => ({
-          id:  key,
-          nom: typeof value === 'string' ? value : (value?.nom ?? key),
-        })));
-      } else {
-        setEmployes([]);
-      }
+      const empList = empData
+        ? Object.entries(empData).map(([key, value]) => ({ id: key, nom: typeof value === 'string' ? value : (value?.nom ?? key) }))
+        : [];
+      setEmployes(empList);
 
-      if (conData) {
-        const docs = Object.entries(conData).map(([key, value]) => ({ id: key, ...value }));
-        setConges(docs);
-        // Éclatement en jours pour la vue calendrier (rétrocompat ancien + nouveau format)
-        setCongesJours(docs.flatMap(expandCongeToJours));
-      } else {
-        setConges([]);
-        setCongesJours([]);
-      }
+      const conList = conData
+        ? Object.entries(conData).map(([key, value]) => ({ id: key, ...value }))
+        : [];
+      setConges(conList);
+      setCongesJours(conList.flatMap(expandCongeToJours));
+
+      const recList = recData
+        ? Object.entries(recData).map(([key, value]) => ({ id: key, ...value }))
+        : [];
+      setRecurrences(recList);
     } catch (error) {
       console.error('Erreur Firebase:', error);
     } finally {
@@ -297,404 +354,570 @@ const CongesApp = () => {
     return () => clearInterval(interval);
   }, [chargerDonnees]);
 
-  // ── Collaborateurs ─────────────────────────────────────────────────────────
-  // Identique à l'original — les collaborateurs n'avaient pas de bug
-  const ajouterCollaborateur = (e) => {
-    e.preventDefault();
-    if (!newCollaborateur.trim()) return;
-    const newId  = editingId || `emp_${Date.now()}`;
-    const newEmp = { nom: newCollaborateur };
-    fetch(getFirebaseUrl(`/employes/${newId}`), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(newEmp),
-    })
-    .then(resp => { if (!resp.ok) throw new Error(`Firebase: ${resp.status}`); return resp.json(); })
-    .then(() => { chargerDonnees(); setNewCollaborateur(''); setEditingId(null); alert('Enregistré ✓'); })
-    .catch(err => { console.error(err); alert('Erreur: ' + err.message); });
-  };
-
-  const supprimerCollaborateur = (id) => {
-    if (congesJours.some(c => c.employe_id === id) && !window.confirm('Ce collaborateur a des congés enregistrés. Supprimer quand même ?')) return;
-    fetch(getFirebaseUrl(`/employes/${id}`), { method: 'DELETE' })
-    .then(() => chargerDonnees());
-  };
-
-  // ── Congés ─────────────────────────────────────────────────────────────────
-  const ajouterConge = async (e) => {
-    e.preventDefault();
-    setSaveError('');
-    try {
-      await saveConge(newConge);
-      chargerDonnees();
-      setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé' });
-      alert('Congé ajouté ✓');
-    } catch (err) {
-      console.error('Erreur ajout congé:', err);
-      setSaveError(err.message);
-      alert('Erreur: ' + err.message);
-    }
-  };
-
-  const supprimerConge = (id) => {
-    fetch(getFirebaseUrl(`/conges/${id}`), { method: 'DELETE' })
-    .then(() => chargerDonnees());
-  };
-
-  // ── Authentification RH ────────────────────────────────────────────────────
-  // Identique à l'original
+  // ── Nettoyage au login RH ─────────────────────────────────────────────────
   const handleRHLogin = (e) => {
     e.preventDefault();
     if (rhPassword === 'encodageconge') {
       setCurrentUser({ type: 'RH' });
       setShowRHLogin(false);
       setRhPassword('');
+      nettoyerAnciensConges().then(() => chargerDonnees());
     } else {
       setRhLoginError('Mot de passe incorrect');
     }
   };
+  const handleLogout = () => { setCurrentUser(null); setRhPage('congés'); setShowRHLogin(false); };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setRhPage('congés');
-    setShowRHLogin(false);
+  // ── Collaborateurs ─────────────────────────────────────────────────────────
+  const ajouterCollaborateur = (e) => {
+    e.preventDefault();
+    if (!newCollaborateur.trim()) return;
+    const newId  = editingId || `emp_${Date.now()}`;
+    fetch(getFirebaseUrl(`/employes/${newId}`), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom: newCollaborateur }),
+    })
+    .then(r => { if (!r.ok) throw new Error(`Firebase: ${r.status}`); return r.json(); })
+    .then(() => { chargerDonnees(); setNewCollaborateur(''); setEditingId(null); alert('Enregistré ✓'); })
+    .catch(err => alert('Erreur: ' + err.message));
+  };
+  const supprimerCollaborateur = (id) => {
+    if (congesJours.some(c => c.employe_id === id) && !window.confirm('Ce collaborateur a des congés. Supprimer quand même ?')) return;
+    fetch(getFirebaseUrl(`/employes/${id}`), { method: 'DELETE' }).then(() => chargerDonnees());
+  };
+
+  // ── Congés ponctuels ───────────────────────────────────────────────────────
+  const ajouterConge = async (e) => {
+    e.preventDefault();
+    setSaveError('');
+    try {
+      await saveConge(newConge);
+      chargerDonnees();
+      setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
+      alert('Congé ajouté ✓');
+    } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
+  };
+  const supprimerConge = (id) => {
+    fetch(getFirebaseUrl(`/conges/${id}`), { method: 'DELETE' }).then(() => chargerDonnees());
+  };
+
+  // ── Récurrences ────────────────────────────────────────────────────────────
+  const toggleJour = (list, day) =>
+    list.includes(day) ? list.filter(d => d !== day) : [...list, day];
+
+  const ajouterRecurrence = async (e) => {
+    e.preventDefault();
+    setSaveError('');
+    try {
+      await saveRecurrence(newRecur, editRecurId);
+      chargerDonnees();
+      setNewRecur(emptyRecur);
+      setEditRecurId(null);
+      setShowRecurForm(false);
+      alert(editRecurId ? 'Récurrence modifiée ✓' : 'Récurrence ajoutée ✓');
+    } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
+  };
+  const supprimerRecurrence = (id) => {
+    if (!window.confirm('Supprimer cette récurrence ?')) return;
+    fetch(getFirebaseUrl(`/recurrences/${id}`), { method: 'DELETE' }).then(() => chargerDonnees());
+  };
+  const editerRecurrence = (rec) => {
+    setNewRecur({ ...emptyRecur, ...rec });
+    setEditRecurId(rec.id);
+    setShowRecurForm(true);
   };
 
   // ── Helpers calendrier ─────────────────────────────────────────────────────
-  // Identiques à l'original — utilisent désormais congesJours (vue éclatée)
-  const getDaysInMonth    = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const getDaysInMonth     = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const getFirstDayOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+
+  // Jours générés par les récurrences pour le mois affiché
+  const joursRecurrents = recurrences.flatMap(rec => {
+    const days = expandRecurrence(rec, moisActuel.getFullYear(), moisActuel.getMonth());
+    return days.map(d => ({
+      ...d,
+      employe_id: rec.employe_id,
+      type: 'Temps partiel',
+      demi_journee: d.demi_journee,
+      isRecurrent: true,
+    }));
+  });
+
+  // Fusion congés ponctuels + récurrents pour le calendrier
+  const tousLesJours = [...congesJours, ...joursRecurrents];
 
   const isDateInConges = (day) => {
-    const dateStr = `${moisActuel.getFullYear()}-${String(moisActuel.getMonth() + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    return congesJours.filter(c => c.date === dateStr);
+    const dateStr = `${moisActuel.getFullYear()}-${String(moisActuel.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    return tousLesJours.filter(c => c.date === dateStr);
   };
 
   const getAbsentsOfDay = (day) => {
-    const dateStr = `${moisActuel.getFullYear()}-${String(moisActuel.getMonth() + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    return congesJours
+    const dateStr = `${moisActuel.getFullYear()}-${String(moisActuel.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    return tousLesJours
       .filter(c => c.date === dateStr)
       .map(conge => {
         const employe = employes.find(e => e.id === conge.employe_id);
         if (!employe) return null;
-
-        // Période : pour les nouveaux congés on l'a directement,
-        // pour les anciens on recalcule comme dans l'original
         let dateDebut, dateFin;
-        if (conge.dateDebut && conge.dateFin) {
+        if (conge.isRecurrent) {
+          dateDebut = dateStr; dateFin = dateStr;
+        } else if (conge.dateDebut && conge.dateFin) {
           dateDebut = new Date(conge.dateDebut).toLocaleDateString('fr-BE');
           dateFin   = new Date(conge.dateFin).toLocaleDateString('fr-BE');
         } else {
-          const allCongesForEmployee = congesJours
-            .filter(c => c.employe_id === conge.employe_id)
-            .map(c => new Date(c.date))
-            .sort((a, b) => a - b);
-
-          const targetDate = new Date(dateStr);
-          let periodDebut = null, periodFin = null;
-          for (let i = 0; i < allCongesForEmployee.length; i++) {
-            if (allCongesForEmployee[i].toDateString() === targetDate.toDateString()) {
-              periodDebut = allCongesForEmployee[i];
-              let j = i;
-              while (j < allCongesForEmployee.length - 1) {
-                if (Math.floor((allCongesForEmployee[j+1] - allCongesForEmployee[j]) / 86400000) > 1) {
-                  periodFin = allCongesForEmployee[j];
-                  break;
-                }
-                j++;
-              }
-              if (!periodFin) periodFin = allCongesForEmployee[allCongesForEmployee.length - 1];
-              break;
-            }
-          }
-          dateDebut = periodDebut ? periodDebut.toLocaleDateString('fr-BE') : dateStr;
-          dateFin   = periodFin   ? periodFin.toLocaleDateString('fr-BE')   : dateStr;
+          dateDebut = dateFin = dateStr;
         }
-
-        return { employe, dateDebut, dateFin, type: conge.type };
+        return { employe, dateDebut, dateFin, type: conge.type, demi_journee: conge.demi_journee, isRecurrent: conge.isRecurrent };
       })
       .filter(Boolean);
   };
 
   const getAbsentsNames = (day) => getAbsentsOfDay(day).map(a => a.employe.nom).join('\n');
-  const getTodayAbsents = () => getAbsentsOfDay(aujourd_hui.getDate());
+  const getTodayAbsents = () => {
+    // Pour aujourd'hui, on recalcule avec le mois courant de aujourd_hui
+    const d = aujourd_hui.getDate();
+    const dateStr = `${aujourd_hui.getFullYear()}-${String(aujourd_hui.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    return tousLesJours
+      .filter(c => c.date === dateStr)
+      .map(conge => {
+        const employe = employes.find(e => e.id === conge.employe_id);
+        if (!employe) return null;
+        return { employe, type: conge.type, demi_journee: conge.demi_journee, isRecurrent: conge.isRecurrent };
+      }).filter(Boolean);
+  };
 
   const monthName = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
-  // ── Render : chargement ────────────────────────────────────────────────────
-  if (loading) return React.createElement('div', { className:'min-h-screen bg-gray-50 flex items-center justify-center' },
-    React.createElement('p', null, `v${APP_VERSION} — Chargement…`)
-  );
+  // ── Sous-composant : formulaire récurrence ─────────────────────────────────
+  const FormulaireRecurrence = () =>
+    React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4 border-l-4 border-yellow-400' },
+      React.createElement('h2', { className:'font-bold text-lg flex items-center gap-2' },
+        '⏰', editRecurId ? 'Modifier la récurrence' : '+ Nouvelle récurrence'
+      ),
 
-  // ── Render : login RH ──────────────────────────────────────────────────────
-  if (showRHLogin) {
-    return React.createElement('div', { className:'min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4' },
-      React.createElement('div', { className:'bg-white rounded-lg shadow-2xl p-8 w-full max-w-md' },
-        React.createElement('h1', { className:'text-3xl font-bold mb-8 text-center' }, 'Accès RH'),
-        React.createElement('form', { onSubmit: handleRHLogin, className:'space-y-4' },
-          React.createElement('input', { type:'password', value:rhPassword, onChange:(e)=>setRhPassword(e.target.value), className:'w-full px-4 py-2 border rounded-lg', placeholder:'Mot de passe', required:true }),
-          rhLoginError && React.createElement('div', { className:'bg-red-50 text-red-700 px-4 py-3 rounded text-sm' }, rhLoginError),
-          React.createElement('button', { type:'submit', className:'w-full bg-blue-600 text-white py-2 rounded-lg' }, 'Connexion'),
-          React.createElement('button', { type:'button', onClick:()=>{ setShowRHLogin(false); setRhPassword(''); }, className:'w-full bg-gray-100 py-2 rounded-lg' }, 'Annuler'),
-          React.createElement('p', { className:'text-xs text-gray-500 text-center mt-4' }, `v${APP_VERSION}`)
+      // Collaborateur
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Collaborateur *'),
+        React.createElement('select', {
+          value: newRecur.employe_id, required: true,
+          onChange: e => setNewRecur({ ...newRecur, employe_id: e.target.value }),
+          className:'w-full px-3 py-2 border rounded text-sm'
+        },
+          React.createElement('option', { value:'' }, 'Sélectionner…'),
+          employes.map(e => React.createElement('option', { key:e.id, value:e.id }, e.nom))
         )
-      )
-    );
-  }
+      ),
 
-  // ── Render : vue RH ────────────────────────────────────────────────────────
-  if (currentUser?.type === 'RH') {
-    return React.createElement('div', { className:'min-h-screen bg-red-50' },
+      // Pattern
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Type de récurrence *'),
+        React.createElement('select', {
+          value: newRecur.pattern,
+          onChange: e => setNewRecur({ ...newRecur, pattern: e.target.value }),
+          className:'w-full px-3 py-2 border rounded text-sm'
+        },
+          React.createElement('option', { value:'weekly' },   'Toutes les semaines'),
+          React.createElement('option', { value:'biweekly' }, 'Semaines paires / impaires')
+        )
+      ),
 
-      // Header RH
-      React.createElement('div', { className:'bg-white shadow-sm border-b' },
-        React.createElement('div', { className:'max-w-7xl mx-auto px-6 py-4' },
-          React.createElement('div', { className:'flex justify-between items-center mb-4' },
-            React.createElement('div', null,
-              React.createElement('h1', { className:'text-2xl font-bold' }, 'RH — Gestion des Congés'),
-              React.createElement('p', { className:'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
-            ),
-            React.createElement('button', { onClick: handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' },
-              React.createElement(LogOut), 'Déco'
-            )
-          ),
-          React.createElement('div', { className:'flex gap-2' },
-            React.createElement('button', { onClick:()=>setRhPage('congés'),         className:`px-6 py-3 border-b-2 ${rhPage==='congés'         ? 'border-red-600 text-red-600' : 'border-transparent'}` }, 'Congés'),
-            React.createElement('button', { onClick:()=>setRhPage('collaborateurs'), className:`px-6 py-3 border-b-2 ${rhPage==='collaborateurs' ? 'border-red-600 text-red-600' : 'border-transparent'}` }, `Collaborateurs (${employes.length})`)
+      // Jours — weekly
+      newRecur.pattern === 'weekly' && React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Jours actifs *'),
+        React.createElement('div', { className:'flex flex-wrap gap-2' },
+          JOURS_SEMAINE.map(j =>
+            React.createElement('button', {
+              key: j.value, type:'button',
+              onClick: () => setNewRecur({ ...newRecur, jours: toggleJour(newRecur.jours, j.value) }),
+              className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
+                newRecur.jours.includes(j.value)
+                  ? 'bg-yellow-400 border-yellow-500 text-white'
+                  : 'bg-white border-gray-300 text-gray-600'
+              }`
+            }, j.label)
           )
         )
       ),
 
-      // Contenu RH
-      React.createElement('div', { className:'max-w-7xl mx-auto px-6 py-8' },
-
-        rhPage === 'congés'
-          // ── Onglet Congés ──────────────────────────────────────────────────
-          ? React.createElement('div', { className:'grid grid-cols-3 gap-8' },
-
-            // Formulaire ajout congé
-            React.createElement('div', { className:'col-span-1' },
-              React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4' },
-                React.createElement('h2', { className:'font-bold text-lg' }, '+ Absence'),
-
-                saveError && React.createElement('div', { className:'bg-red-50 border border-red-300 text-red-700 rounded p-2 text-xs' }, saveError),
-
-                React.createElement('select', {
-                  value: newConge.employe_id,
-                  onChange: (e) => setNewConge({ ...newConge, employe_id: e.target.value }),
-                  className:'w-full px-3 py-2 border rounded'
-                },
-                  React.createElement('option', { value:'' }, 'Sélectionner…'),
-                  employes.map(e => React.createElement('option', { key:e.id, value:e.id }, e.nom))
-                ),
-
-                React.createElement('select', {
-                  value: newConge.type,
-                  onChange: (e) => setNewConge({ ...newConge, type: e.target.value }),
-                  className:'w-full px-3 py-2 border rounded'
-                },
-                  ['Congé','Maladie','Temps partiel'].map(t =>
-                    React.createElement('option', { key:t, value:t }, `${getTypeConfig(t).icon} ${t}`)
-                  )
-                ),
-
-                React.createElement('div', null,
-                  React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Date début *'),
-                  React.createElement('input', {
-                    type:'date', value:newConge.dateDebut, required:true,
-                    onChange:(e)=>setNewConge({ ...newConge, dateDebut:e.target.value }),
-                    className:'w-full px-3 py-2 border rounded'
-                  })
-                ),
-
-                React.createElement('div', null,
-                  React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Date fin (vide = 1 jour)'),
-                  React.createElement('input', {
-                    type:'date', value:newConge.dateFin, min:newConge.dateDebut,
-                    onChange:(e)=>setNewConge({ ...newConge, dateFin:e.target.value }),
-                    className:'w-full px-3 py-2 border rounded'
-                  })
-                ),
-
-                React.createElement('button', {
-                  onClick: ajouterConge,
-                  disabled: !newConge.employe_id || !newConge.dateDebut,
-                  className:'w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded transition'
-                }, 'Ajouter')
-              )
-            ),
-
-            // Panneau droite : aujourd'hui + stats + liste
-            React.createElement('div', { className:'col-span-2 space-y-6' },
-
-              React.createElement('div', { className:'grid grid-cols-2 gap-6' },
-
-                // Absents aujourd'hui
-                React.createElement('div', { className:'bg-white rounded shadow p-6' },
-                  React.createElement('h3', { className:'font-bold text-lg mb-4' }, `Aujourd'hui (${aujourd_hui.getDate()}/${String(aujourd_hui.getMonth()+1).padStart(2,'0')})`),
-                  getTodayAbsents().length === 0
-                    ? React.createElement('p', { className:'text-gray-500 text-sm' }, 'Aucune absence')
-                    : getTodayAbsents().map((a, i) => {
-                        const cfg = getTypeConfig(a.type);
-                        return React.createElement('div', { key:i, className:`flex gap-2 p-3 rounded mb-2 ${cfg.color}` },
-                          React.createElement('span', null, cfg.icon),
-                          React.createElement('div', null,
-                            React.createElement('p', { className:'font-medium text-sm' }, a.employe.nom),
-                            React.createElement('p', { className:'text-xs text-gray-600' }, a.type)
-                          )
-                        );
-                      })
-                ),
-
-                // Stats
-                React.createElement('div', { className:'bg-white rounded shadow p-6' },
-                  React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Statistiques'),
-                  React.createElement('div', { className:'space-y-2 text-sm' },
-                    React.createElement('p', null, `👥 Collaborateurs : ${employes.length}`),
-                    React.createElement('p', null, `📋 Périodes enregistrées : ${conges.length}`),
-                    React.createElement('p', null, `📅 Jours d'absence : ${congesJours.length}`),
-                    React.createElement('p', null, `🏠 Absents aujourd'hui : ${getTodayAbsents().length}`)
-                  )
-                )
-              ),
-
-              // Liste des congés enregistrés
-              React.createElement('div', { className:'bg-white rounded shadow p-6' },
-                React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Périodes de congé enregistrées'),
-                conges.length === 0
-                  ? React.createElement('p', { className:'text-gray-500 text-sm' }, 'Aucun congé enregistré.')
-                  : React.createElement('div', { className:'overflow-x-auto' },
-                    React.createElement('table', { className:'w-full text-sm border-collapse' },
-                      React.createElement('thead', null,
-                        React.createElement('tr', { className:'bg-gray-50 text-gray-500 text-left' },
-                          React.createElement('th', { className:'px-3 py-2' }, 'Collaborateur'),
-                          React.createElement('th', { className:'px-3 py-2' }, 'Type'),
-                          React.createElement('th', { className:'px-3 py-2' }, 'Début'),
-                          React.createElement('th', { className:'px-3 py-2' }, 'Fin'),
-                          React.createElement('th', { className:'px-3 py-2 text-center' }, 'Jours'),
-                          React.createElement('th', { className:'px-3 py-2' }, '')
-                        )
-                      ),
-                      React.createElement('tbody', null,
-                        conges
-                          .slice()
-                          .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))
-                          .map(c => {
-                            const emp = employes.find(e => e.id === c.employe_id);
-                            const cfg = getTypeConfig(c.type);
-                            // Rétrocompat : ancien format = 1 jour
-                            const debut = c.dateDebut || c.date || '—';
-                            const fin   = c.dateFin   || c.date || '—';
-                            const nb    = c.nbJours   || 1;
-                            return React.createElement('tr', { key:c.id, className:'border-t hover:bg-gray-50' },
-                              React.createElement('td', { className:'px-3 py-2 font-medium' }, emp?.nom ?? c.employe_id),
-                              React.createElement('td', { className:'px-3 py-2' },
-                                React.createElement('span', { className:`px-2 py-1 rounded text-xs ${cfg.color} ${cfg.text}` }, `${cfg.icon} ${c.type}`)
-                              ),
-                              React.createElement('td', { className:'px-3 py-2' }, debut),
-                              React.createElement('td', { className:'px-3 py-2' }, fin),
-                              React.createElement('td', { className:'px-3 py-2 text-center font-bold' }, nb),
-                              React.createElement('td', { className:'px-3 py-2' },
-                                React.createElement('button', {
-                                  onClick:()=>{ if(window.confirm('Supprimer ce congé ?')) supprimerConge(c.id); },
-                                  className:'px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200'
-                                }, '✕')
-                              )
-                            );
-                          })
-                      )
-                    )
-                  )
-              )
+      // Jours — biweekly
+      newRecur.pattern === 'biweekly' && React.createElement('div', { className:'space-y-3' },
+        React.createElement('div', null,
+          React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines PAIRES'),
+          React.createElement('div', { className:'flex flex-wrap gap-2' },
+            JOURS_SEMAINE.map(j =>
+              React.createElement('button', {
+                key: j.value, type:'button',
+                onClick: () => setNewRecur({ ...newRecur, joursP: toggleJour(newRecur.joursP, j.value) }),
+                className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
+                  newRecur.joursP.includes(j.value)
+                    ? 'bg-blue-400 border-blue-500 text-white'
+                    : 'bg-white border-gray-300 text-gray-600'
+                }`
+              }, j.label)
             )
           )
+        ),
+        React.createElement('div', null,
+          React.createElement('label', { className:'block text-xs text-gray-500 mb-2' }, 'Semaines IMPAIRES'),
+          React.createElement('div', { className:'flex flex-wrap gap-2' },
+            JOURS_SEMAINE.map(j =>
+              React.createElement('button', {
+                key: j.value, type:'button',
+                onClick: () => setNewRecur({ ...newRecur, joursI: toggleJour(newRecur.joursI, j.value) }),
+                className:`px-3 py-1 rounded text-sm font-medium border-2 transition ${
+                  newRecur.joursI.includes(j.value)
+                    ? 'bg-purple-400 border-purple-500 text-white'
+                    : 'bg-white border-gray-300 text-gray-600'
+                }`
+              }, j.label)
+            )
+          )
+        )
+      ),
 
-          // ── Onglet Collaborateurs ──────────────────────────────────────────
-          : React.createElement('div', { className:'grid grid-cols-3 gap-8' },
-            React.createElement('div', { className:'col-span-1' },
-              React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4' },
-                React.createElement('h2', { className:'font-bold text-lg' }, editingId ? 'Modifier' : '+ Ajouter'),
-                React.createElement('input', {
-                  type:'text', value:newCollaborateur,
-                  onChange:(e)=>setNewCollaborateur(e.target.value),
-                  className:'w-full px-3 py-2 border rounded', placeholder:'Nom', required:true
-                }),
-                React.createElement('button', {
-                  onClick: ajouterCollaborateur,
-                  className:'w-full bg-blue-600 text-white py-2 rounded'
-                }, editingId ? 'Mettre à jour' : 'Ajouter'),
-                editingId && React.createElement('button', {
-                  onClick:()=>{ setEditingId(null); setNewCollaborateur(''); },
-                  className:'w-full bg-gray-100 py-2 rounded text-sm'
-                }, 'Annuler')
-              )
+      // Demi-journée
+      React.createElement('div', null,
+        React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Demi-journée (optionnel)'),
+        React.createElement('select', {
+          value: newRecur.demi_journee,
+          onChange: e => setNewRecur({ ...newRecur, demi_journee: e.target.value }),
+          className:'w-full px-3 py-2 border rounded text-sm'
+        },
+          React.createElement('option', { value:'' }, 'Journée entière'),
+          React.createElement('option', { value:'AM' }, '☀️ Matin seulement (AM)'),
+          React.createElement('option', { value:'PM' }, '🌙 Après-midi seulement (PM)')
+        )
+      ),
+
+      // Dates
+      React.createElement('div', { className:'grid grid-cols-2 gap-3' },
+        React.createElement('div', null,
+          React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Début *'),
+          React.createElement('input', {
+            type:'date', value:newRecur.dateDebut, required:true,
+            onChange: e => setNewRecur({ ...newRecur, dateDebut: e.target.value }),
+            className:'w-full px-3 py-2 border rounded text-sm'
+          })
+        ),
+        React.createElement('div', null,
+          React.createElement('label', { className:'block text-xs text-gray-500 mb-1' }, 'Fin (vide = indéfini)'),
+          React.createElement('input', {
+            type:'date', value:newRecur.dateFin, min:newRecur.dateDebut,
+            onChange: e => setNewRecur({ ...newRecur, dateFin: e.target.value }),
+            className:'w-full px-3 py-2 border rounded text-sm'
+          })
+        )
+      ),
+
+      // Boutons
+      React.createElement('div', { className:'flex gap-2' },
+        React.createElement('button', {
+          onClick: ajouterRecurrence,
+          disabled: !newRecur.employe_id || !newRecur.dateDebut,
+          className:'flex-1 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white py-2 rounded font-medium transition'
+        }, editRecurId ? 'Modifier' : 'Enregistrer'),
+        React.createElement('button', {
+          type:'button',
+          onClick: () => { setShowRecurForm(false); setNewRecur(emptyRecur); setEditRecurId(null); },
+          className:'px-4 bg-gray-100 hover:bg-gray-200 rounded transition'
+        }, 'Annuler')
+      )
+    );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (loading) return React.createElement('div', { className:'min-h-screen bg-gray-50 flex items-center justify-center' },
+    React.createElement('p', null, `v${APP_VERSION} — Chargement…`)
+  );
+
+  if (showRHLogin) return React.createElement('div', { className:'min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4' },
+    React.createElement('div', { className:'bg-white rounded-lg shadow-2xl p-8 w-full max-w-md' },
+      React.createElement('h1', { className:'text-3xl font-bold mb-8 text-center' }, 'Accès RH'),
+      React.createElement('form', { onSubmit: handleRHLogin, className:'space-y-4' },
+        React.createElement('input', { type:'password', value:rhPassword, onChange:e=>setRhPassword(e.target.value), className:'w-full px-4 py-2 border rounded-lg', placeholder:'Mot de passe', required:true }),
+        rhLoginError && React.createElement('div', { className:'bg-red-50 text-red-700 px-4 py-3 rounded text-sm' }, rhLoginError),
+        React.createElement('button', { type:'submit', className:'w-full bg-blue-600 text-white py-2 rounded-lg' }, 'Connexion'),
+        React.createElement('button', { type:'button', onClick:()=>{ setShowRHLogin(false); setRhPassword(''); }, className:'w-full bg-gray-100 py-2 rounded-lg' }, 'Annuler'),
+        React.createElement('p', { className:'text-xs text-gray-500 text-center mt-4' }, `v${APP_VERSION}`)
+      )
+    )
+  );
+
+  // ── Vue RH ─────────────────────────────────────────────────────────────────
+  if (currentUser?.type === 'RH') return React.createElement('div', { className:'min-h-screen bg-red-50' },
+
+    React.createElement('div', { className:'bg-white shadow-sm border-b' },
+      React.createElement('div', { className:'max-w-7xl mx-auto px-6 py-4' },
+        React.createElement('div', { className:'flex justify-between items-center mb-4' },
+          React.createElement('div', null,
+            React.createElement('h1', { className:'text-2xl font-bold' }, 'RH — Gestion des Congés'),
+            React.createElement('p', { className:'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
+          ),
+          React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
+        ),
+        React.createElement('div', { className:'flex gap-2' },
+          ['congés','récurrences','collaborateurs'].map(page =>
+            React.createElement('button', {
+              key: page, onClick:()=>setRhPage(page),
+              className:`px-5 py-3 border-b-2 capitalize text-sm font-medium ${rhPage===page ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500'}`
+            }, page === 'récurrences' ? '⏰ Récurrences' : page === 'congés' ? '📋 Congés' : `👥 Collaborateurs (${employes.length})`)
+          )
+        )
+      )
+    ),
+
+    React.createElement('div', { className:'max-w-7xl mx-auto px-6 py-8' },
+
+      // ── Onglet Congés ────────────────────────────────────────────────────
+      rhPage === 'congés' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
+        React.createElement('div', { className:'col-span-1 space-y-4' },
+          React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4' },
+            React.createElement('h2', { className:'font-bold text-lg' }, '+ Absence ponctuelle'),
+            saveError && React.createElement('div', { className:'bg-red-50 border border-red-300 text-red-700 rounded p-2 text-xs' }, saveError),
+            React.createElement('select', {
+              value:newConge.employe_id, onChange:e=>setNewConge({...newConge,employe_id:e.target.value}),
+              className:'w-full px-3 py-2 border rounded text-sm'
+            },
+              React.createElement('option',{value:''},'Sélectionner…'),
+              employes.map(e=>React.createElement('option',{key:e.id,value:e.id},e.nom))
             ),
-            React.createElement('div', { className:'col-span-2' },
-              React.createElement('div', { className:'bg-white rounded shadow p-6' },
-                React.createElement('h2', { className:'font-bold text-lg mb-4' }, `Collaborateurs (${employes.length})`),
-                React.createElement('div', { className:'space-y-2' },
-                  employes.map(e => {
-                    const nbJours = congesJours.filter(c => c.employe_id === e.id).length;
-                    return React.createElement('div', { key:e.id, className:'flex justify-between p-3 bg-gray-50 rounded' },
-                      React.createElement('div', null,
-                        React.createElement('p', { className:'font-medium text-sm' }, e.nom),
-                        React.createElement('p', { className:'text-xs text-gray-600' }, `${nbJours} jour(s) d'absence`)
-                      ),
-                      React.createElement('div', { className:'flex gap-2' },
-                        React.createElement('button', {
-                          onClick:()=>{ setNewCollaborateur(e.nom); setEditingId(e.id); },
-                          className:'px-2 py-1 bg-yellow-100 text-xs rounded'
-                        }, 'Modifier'),
-                        React.createElement('button', {
-                          onClick:()=>supprimerCollaborateur(e.id),
-                          className:'px-2 py-1 bg-red-100 text-xs rounded'
-                        }, 'Supprimer')
+            React.createElement('select', {
+              value:newConge.type, onChange:e=>setNewConge({...newConge,type:e.target.value}),
+              className:'w-full px-3 py-2 border rounded text-sm'
+            },
+              ['Congé','Maladie','Temps partiel'].map(t=>React.createElement('option',{key:t,value:t},`${getTypeConfig(t).icon} ${t}`))
+            ),
+            React.createElement('select', {
+              value:newConge.demi_journee, onChange:e=>setNewConge({...newConge,demi_journee:e.target.value}),
+              className:'w-full px-3 py-2 border rounded text-sm'
+            },
+              React.createElement('option',{value:''},'Journée entière'),
+              React.createElement('option',{value:'AM'},'☀️ Matin (AM)'),
+              React.createElement('option',{value:'PM'},'🌙 Après-midi (PM)')
+            ),
+            React.createElement('div', null,
+              React.createElement('label',{className:'block text-xs text-gray-500 mb-1'},'Date début *'),
+              React.createElement('input',{type:'date',value:newConge.dateDebut,required:true,onChange:e=>setNewConge({...newConge,dateDebut:e.target.value}),className:'w-full px-3 py-2 border rounded text-sm'})
+            ),
+            React.createElement('div', null,
+              React.createElement('label',{className:'block text-xs text-gray-500 mb-1'},'Date fin (vide = 1 jour)'),
+              React.createElement('input',{type:'date',value:newConge.dateFin,min:newConge.dateDebut,onChange:e=>setNewConge({...newConge,dateFin:e.target.value}),className:'w-full px-3 py-2 border rounded text-sm'})
+            ),
+            React.createElement('button', {
+              onClick:ajouterConge, disabled:!newConge.employe_id||!newConge.dateDebut,
+              className:'w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded transition'
+            }, 'Ajouter')
+          )
+        ),
+
+        React.createElement('div', { className:'col-span-2 space-y-6' },
+          React.createElement('div', { className:'grid grid-cols-2 gap-6' },
+            React.createElement('div', { className:'bg-white rounded shadow p-6' },
+              React.createElement('h3', { className:'font-bold text-lg mb-4' }, `Aujourd'hui`),
+              getTodayAbsents().length===0
+                ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucune absence')
+                : getTodayAbsents().map((a,i)=>{
+                    const cfg=getTypeConfig(a.type);
+                    return React.createElement('div',{key:i,className:`flex gap-2 p-3 rounded mb-2 ${cfg.color}`},
+                      React.createElement('span',null,cfg.icon),
+                      React.createElement('div',null,
+                        React.createElement('p',{className:'font-medium text-sm'},a.employe.nom),
+                        React.createElement('p',{className:'text-xs text-gray-600'},
+                          a.demi_journee ? `${a.type} (${a.demi_journee})` : a.type,
+                          a.isRecurrent ? ' 🔁' : ''
+                        )
+                      )
+                    );
+                  })
+            ),
+            React.createElement('div', { className:'bg-white rounded shadow p-6' },
+              React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Statistiques'),
+              React.createElement('div', { className:'space-y-2 text-sm' },
+                React.createElement('p', null, `👥 Collaborateurs : ${employes.length}`),
+                React.createElement('p', null, `📋 Congés ponctuels : ${conges.length}`),
+                React.createElement('p', null, `🔁 Récurrences actives : ${recurrences.length}`),
+                React.createElement('p', null, `🏠 Absents aujourd'hui : ${getTodayAbsents().length}`)
+              )
+            )
+          ),
+
+          React.createElement('div', { className:'bg-white rounded shadow p-6' },
+            React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Congés ponctuels enregistrés'),
+            conges.length===0
+              ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucun.')
+              : React.createElement('table',{className:'w-full text-sm border-collapse'},
+                  React.createElement('thead',null,
+                    React.createElement('tr',{className:'bg-gray-50 text-gray-500 text-left'},
+                      ['Collaborateur','Type','½J','Début','Fin','j',''].map((h,i)=>React.createElement('th',{key:i,className:'px-3 py-2'},h))
+                    )
+                  ),
+                  React.createElement('tbody',null,
+                    conges.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(c=>{
+                      const emp=employes.find(e=>e.id===c.employe_id);
+                      const cfg=getTypeConfig(c.type);
+                      return React.createElement('tr',{key:c.id,className:'border-t hover:bg-gray-50'},
+                        React.createElement('td',{className:'px-3 py-2 font-medium'},emp?.nom??c.employe_id),
+                        React.createElement('td',{className:'px-3 py-2'},
+                          React.createElement('span',{className:`px-2 py-1 rounded text-xs ${cfg.color} ${cfg.text}`},`${cfg.icon} ${c.type}`)
+                        ),
+                        React.createElement('td',{className:'px-3 py-2 text-center'},c.demi_journee||'—'),
+                        React.createElement('td',{className:'px-3 py-2'},c.dateDebut||c.date||'—'),
+                        React.createElement('td',{className:'px-3 py-2'},c.dateFin||c.date||'—'),
+                        React.createElement('td',{className:'px-3 py-2 text-center font-bold'},c.nbJours||1),
+                        React.createElement('td',{className:'px-3 py-2'},
+                          React.createElement('button',{
+                            onClick:()=>{ if(window.confirm('Supprimer ?')) supprimerConge(c.id); },
+                            className:'px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200'
+                          },'✕')
+                        )
+                      );
+                    })
+                  )
+                )
+          )
+        )
+      ),
+
+      // ── Onglet Récurrences ───────────────────────────────────────────────
+      rhPage === 'récurrences' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
+        React.createElement('div', { className:'col-span-1' },
+          showRecurForm
+            ? React.createElement(FormulaireRecurrence)
+            : React.createElement('button', {
+                onClick:()=>setShowRecurForm(true),
+                className:'w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2'
+              }, '⏰ + Nouvelle récurrence')
+        ),
+
+        React.createElement('div', { className:'col-span-2' },
+          React.createElement('div', { className:'bg-white rounded shadow p-6' },
+            React.createElement('h3', { className:'font-bold text-lg mb-4' }, `Récurrences actives (${recurrences.length})`),
+            recurrences.length===0
+              ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucune récurrence configurée.')
+              : React.createElement('div',{className:'space-y-3'},
+                  recurrences.map(rec=>{
+                    const emp=employes.find(e=>e.id===rec.employe_id);
+                    const jourLabels = (jours) => (jours||[]).map(d=>JOURS_SEMAINE.find(j=>j.value===d)?.label||d).join(', ');
+                    return React.createElement('div',{key:rec.id,className:'border rounded p-4 bg-yellow-50 border-yellow-200'},
+                      React.createElement('div',{className:'flex justify-between items-start'},
+                        React.createElement('div',null,
+                          React.createElement('p',{className:'font-medium text-sm'},emp?.nom??rec.employe_id),
+                          React.createElement('p',{className:'text-xs text-gray-600 mt-1'},
+                            rec.pattern==='weekly'
+                              ? `🔁 Hebdo : ${jourLabels(rec.jours)}`
+                              : `🔁 Paires : ${jourLabels(rec.joursP)} | Impaires : ${jourLabels(rec.joursI)}`
+                          ),
+                          rec.demi_journee && React.createElement('p',{className:'text-xs text-gray-500'},
+                            rec.demi_journee==='AM' ? '☀️ Matin seulement' : '🌙 Après-midi seulement'
+                          ),
+                          React.createElement('p',{className:'text-xs text-gray-400 mt-1'},
+                            `Du ${rec.dateDebut}${rec.dateFin ? ` au ${rec.dateFin}` : ' (indéfini)'}`
+                          )
+                        ),
+                        React.createElement('div',{className:'flex gap-2'},
+                          React.createElement('button',{
+                            onClick:()=>editerRecurrence(rec),
+                            className:'px-3 py-1 bg-yellow-200 text-yellow-800 text-xs rounded hover:bg-yellow-300'
+                          },'✏️'),
+                          React.createElement('button',{
+                            onClick:()=>supprimerRecurrence(rec.id),
+                            className:'px-3 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200'
+                          },'✕')
+                        )
                       )
                     );
                   })
                 )
-              )
+          )
+        )
+      ),
+
+      // ── Onglet Collaborateurs ────────────────────────────────────────────
+      rhPage === 'collaborateurs' && React.createElement('div', { className:'grid grid-cols-3 gap-8' },
+        React.createElement('div', { className:'col-span-1' },
+          React.createElement('div', { className:'bg-white rounded shadow p-6 space-y-4' },
+            React.createElement('h2',{className:'font-bold text-lg'},editingId?'Modifier':'+ Ajouter'),
+            React.createElement('input',{
+              type:'text',value:newCollaborateur,
+              onChange:e=>setNewCollaborateur(e.target.value),
+              className:'w-full px-3 py-2 border rounded',placeholder:'Nom',required:true
+            }),
+            React.createElement('button',{onClick:ajouterCollaborateur,className:'w-full bg-blue-600 text-white py-2 rounded'},editingId?'Mettre à jour':'Ajouter'),
+            editingId && React.createElement('button',{onClick:()=>{setEditingId(null);setNewCollaborateur('');},className:'w-full bg-gray-100 py-2 rounded text-sm'},'Annuler')
+          )
+        ),
+        React.createElement('div', { className:'col-span-2' },
+          React.createElement('div', { className:'bg-white rounded shadow p-6' },
+            React.createElement('h2',{className:'font-bold text-lg mb-4'},`Collaborateurs (${employes.length})`),
+            React.createElement('div',{className:'space-y-2'},
+              employes.map(e=>{
+                const nb=tousLesJours.filter(c=>c.employe_id===e.id).length;
+                return React.createElement('div',{key:e.id,className:'flex justify-between p-3 bg-gray-50 rounded'},
+                  React.createElement('div',null,
+                    React.createElement('p',{className:'font-medium text-sm'},e.nom),
+                    React.createElement('p',{className:'text-xs text-gray-600'},`${nb} jour(s) d'absence`)
+                  ),
+                  React.createElement('div',{className:'flex gap-2'},
+                    React.createElement('button',{onClick:()=>{setNewCollaborateur(e.nom);setEditingId(e.id);},className:'px-2 py-1 bg-yellow-100 text-xs rounded'},'Modifier'),
+                    React.createElement('button',{onClick:()=>supprimerCollaborateur(e.id),className:'px-2 py-1 bg-red-100 text-xs rounded'},'Supprimer')
+                  )
+                );
+              })
             )
           )
+        )
       )
-    );
-  }
+    )
+  );
 
-  // ── Render : vue publique (calendrier) ─────────────────────────────────────
+  // ── Vue publique (calendrier) ──────────────────────────────────────────────
   return React.createElement('div', { className:'min-h-screen bg-gray-50' },
-
     React.createElement('div', { className:'bg-white shadow-sm border-b' },
       React.createElement('div', { className:'max-w-4xl mx-auto px-6 py-4 flex justify-between items-center' },
         React.createElement('div', null,
-          React.createElement('h1', { className:'text-2xl font-bold' }, 'Calendrier des Congés'),
-          React.createElement('p', { className:'text-sm text-gray-600' }, aujourd_hui.toLocaleDateString('fr-BE'))
+          React.createElement('h1',{className:'text-2xl font-bold'},'Calendrier des Congés'),
+          React.createElement('p',{className:'text-sm text-gray-600'},aujourd_hui.toLocaleDateString('fr-BE'))
         ),
         React.createElement('div', { className:'flex items-center gap-4' },
-          React.createElement('span', { className:'text-xs text-gray-500' }, `v${APP_VERSION}`),
-          React.createElement('button', {
-            onClick:()=>setShowRHLogin(true),
-            className:'px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2'
-          }, React.createElement(Lock), ' RH')
+          React.createElement('span',{className:'text-xs text-gray-500'},`v${APP_VERSION}`),
+          React.createElement('button',{onClick:()=>setShowRHLogin(true),className:'px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2'},React.createElement(Lock),' RH')
         )
       )
     ),
 
     React.createElement('div', { className:'max-w-4xl mx-auto px-6 py-8' },
 
+      // Légende
+      React.createElement('div', { className:'flex gap-3 mb-4 flex-wrap' },
+        Object.entries(TYPES_CONFIG).map(([type, cfg]) =>
+          React.createElement('div', { key:type, className:`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${cfg.color} ${cfg.text}` },
+            cfg.icon, ' ', type
+          )
+        ),
+        React.createElement('div', { className:'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600' },
+          '🔁 Récurrent'
+        )
+      ),
+
       // Absents du jour sélectionné
       React.createElement('div', { className:'bg-white rounded shadow p-6 mb-6' },
-        React.createElement('h2', { className:'font-bold mb-4' },
+        React.createElement('h2',{className:'font-bold mb-4'},
           `Absences du ${String(jourAffiche).padStart(2,'0')}/${String(moisActuel.getMonth()+1).padStart(2,'0')}/${moisActuel.getFullYear()}`
         ),
-        getAbsentsOfDay(jourAffiche).length === 0
-          ? React.createElement('p', { className:'text-gray-500 text-sm' }, 'Aucune absence ce jour')
-          : getAbsentsOfDay(jourAffiche).map((a, i) => {
-              const cfg = getTypeConfig(a.type);
-              return React.createElement('div', { key:i, className:`flex gap-3 p-3 rounded border ${cfg.color} ${cfg.border} mb-2` },
-                React.createElement('span', null, cfg.icon),
-                React.createElement('div', null,
-                  React.createElement('p', { className:'font-medium text-sm' }, a.employe.nom),
-                  React.createElement('p', { className:`text-xs ${cfg.text}` }, `${a.type} : ${a.dateDebut} → ${a.dateFin}`)
+        getAbsentsOfDay(jourAffiche).length===0
+          ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucune absence ce jour')
+          : getAbsentsOfDay(jourAffiche).map((a,i)=>{
+              const cfg=getTypeConfig(a.type);
+              return React.createElement('div',{key:i,className:`flex gap-3 p-3 rounded border ${cfg.color} ${cfg.border} mb-2`},
+                React.createElement('span',null,cfg.icon),
+                React.createElement('div',null,
+                  React.createElement('p',{className:'font-medium text-sm'},
+                    a.employe.nom, a.isRecurrent ? ' 🔁' : ''
+                  ),
+                  React.createElement('p',{className:`text-xs ${cfg.text}`},
+                    a.demi_journee
+                      ? `${a.type} — ${a.demi_journee==='AM'?'☀️ Matin':'🌙 Après-midi'} : ${a.dateDebut} → ${a.dateFin}`
+                      : `${a.type} : ${a.dateDebut} → ${a.dateFin}`
+                  )
                 )
               );
             })
@@ -703,41 +926,33 @@ const CongesApp = () => {
       // Calendrier
       React.createElement('div', { className:'bg-white rounded shadow p-8' },
         React.createElement('div', { className:'flex justify-between items-center mb-6' },
-          React.createElement('button', { onClick:()=>setMoisActuel(new Date(moisActuel.getFullYear(), moisActuel.getMonth()-1, 1)) }, React.createElement(ChevronLeft)),
-          React.createElement('h2', { className:'text-2xl font-bold text-center' }, `${monthName[moisActuel.getMonth()]} ${moisActuel.getFullYear()}`),
-          React.createElement('button', { onClick:()=>setMoisActuel(new Date(moisActuel.getFullYear(), moisActuel.getMonth()+1, 1)) }, React.createElement(ChevronRight))
+          React.createElement('button',{onClick:()=>setMoisActuel(new Date(moisActuel.getFullYear(),moisActuel.getMonth()-1,1))},React.createElement(ChevronLeft)),
+          React.createElement('h2',{className:'text-2xl font-bold text-center'},`${monthName[moisActuel.getMonth()]} ${moisActuel.getFullYear()}`),
+          React.createElement('button',{onClick:()=>setMoisActuel(new Date(moisActuel.getFullYear(),moisActuel.getMonth()+1,1))},React.createElement(ChevronRight))
         ),
-        React.createElement('div', { className:'grid grid-cols-7 gap-2 mb-4' },
-          ['L','M','M','J','V','S','D'].map((d,i) => React.createElement('div', { key:i, className:'text-center font-bold py-2 text-xs' }, d))
+        React.createElement('div',{className:'grid grid-cols-7 gap-2 mb-4'},
+          ['L','M','M','J','V','S','D'].map((d,i)=>React.createElement('div',{key:i,className:'text-center font-bold py-2 text-xs'},d))
         ),
-        React.createElement('div', { className:'grid grid-cols-7 gap-2' },
-          Array(getFirstDayOfMonth(moisActuel) === 0 ? 6 : getFirstDayOfMonth(moisActuel) - 1)
-            .fill(null).map((_,i) => React.createElement('div', { key:`e${i}` })),
-          Array(getDaysInMonth(moisActuel)).fill(null).map((_,i) => {
-            const day          = i + 1;
-            const congesDuJour = isDateInConges(day);
-            const isToday      = day === aujourd_hui.getDate() && moisActuel.getMonth() === aujourd_hui.getMonth() && moisActuel.getFullYear() === aujourd_hui.getFullYear();
+        React.createElement('div',{className:'grid grid-cols-7 gap-2'},
+          Array(getFirstDayOfMonth(moisActuel)===0?6:getFirstDayOfMonth(moisActuel)-1).fill(null).map((_,i)=>React.createElement('div',{key:`e${i}`})),
+          Array(getDaysInMonth(moisActuel)).fill(null).map((_,i)=>{
+            const day           = i+1;
+            const congesDuJour  = isDateInConges(day);
+            const isToday       = day===aujourd_hui.getDate() && moisActuel.getMonth()===aujourd_hui.getMonth() && moisActuel.getFullYear()===aujourd_hui.getFullYear();
             const dateFormatted = `${String(day).padStart(2,'0')}/${String(moisActuel.getMonth()+1).padStart(2,'0')}`;
             const absentsNames  = getAbsentsNames(day);
 
-            return React.createElement('div', {
-              key: day,
-              onClick: () => setJourAffiche(day),
-              className: `aspect-square rounded border-2 flex flex-col cursor-pointer overflow-hidden ${
-                isToday ? 'bg-green-100 border-green-400 ring-2 ring-green-300' : 'bg-gray-50 border-gray-200'
+            return React.createElement('div',{
+              key:day, onClick:()=>setJourAffiche(day),
+              className:`aspect-square rounded border-2 flex flex-col cursor-pointer overflow-hidden ${
+                isToday?'bg-green-100 border-green-400 ring-2 ring-green-300':'bg-gray-50 border-gray-200'
               }`,
               title: absentsNames,
             },
-              React.createElement('span', {
-                className: 'text-xs font-bold text-gray-700 px-1 pt-1 shrink-0',
-              }, dateFormatted),
-              congesDuJour.length > 0
-                ? React.createElement('div', {
-                    className: 'flex-1 p-1 min-h-0',
-                  },
-                    React.createElement(PieDisc, { congesDuJour })
-                  )
-                : React.createElement('div', { className: 'flex-1' })
+              React.createElement('span',{className:'text-xs font-bold text-gray-700 px-1 pt-1 shrink-0'},dateFormatted),
+              congesDuJour.length>0
+                ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(PieDisc,{congesDuJour}))
+                : React.createElement('div',{className:'flex-1'})
             );
           })
         )
