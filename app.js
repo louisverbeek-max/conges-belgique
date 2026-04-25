@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.1.1";
+const APP_VERSION = "2.1.2";
 
 // ===== FIREBASE CONFIG =====
 // Vos paramètres d'origine — inchangés
@@ -115,11 +115,9 @@ const describeArc = (cx, cy, r, startAngle, endAngle) => {
 
 const PieDisc = ({ congesDuJour }) => {
   const total = congesDuJour.length;
-  // Taille dynamique : 20px pour 1 absent, +4px par absent, max 38px
-  const size = Math.min(38, 20 + (total - 1) * 4);
-  const r    = size / 2 - 0.5;
-  const cx   = size / 2;
-  const cy   = size / 2;
+  // Taille fixe : le SVG utilise un viewBox 100x100 et s'étire
+  // via width/height 100% pour remplir le conteneur parent.
+  const cx = 50, cy = 50, r = 48;
 
   // Compter par type
   const counts = {};
@@ -129,21 +127,18 @@ const PieDisc = ({ congesDuJour }) => {
   });
   const types = Object.keys(counts);
 
-  const fontSize = size <= 24 ? Math.round(size * 0.38) : Math.round(size * 0.34);
-
   // Disque uni si 1 seul type présent
   if (types.length === 1) {
     return React.createElement('svg', {
-      width: size, height: size,
-      viewBox: `0 0 ${size} ${size}`,
-      style: { display: 'block' },
+      viewBox: '0 0 100 100',
+      style: { display: 'block', width: '100%', height: '100%' },
     },
       React.createElement('circle', { cx, cy, r, fill: getTypeColor(types[0]) }),
       React.createElement('text', {
         x: cx, y: cy,
         textAnchor: 'middle', dominantBaseline: 'central',
         fill: 'white', fontWeight: 'bold',
-        fontSize: `${fontSize}px`, fontFamily: 'sans-serif',
+        fontSize: '34', fontFamily: 'sans-serif',
       }, total)
     );
   }
@@ -165,16 +160,15 @@ const PieDisc = ({ congesDuJour }) => {
   });
 
   return React.createElement('svg', {
-    width: size, height: size,
-    viewBox: `0 0 ${size} ${size}`,
-    style: { display: 'block' },
+    viewBox: '0 0 100 100',
+    style: { display: 'block', width: '100%', height: '100%' },
   },
     ...sectors,
     React.createElement('text', {
       x: cx, y: cy,
       textAnchor: 'middle', dominantBaseline: 'central',
       fill: 'white', fontWeight: 'bold',
-      fontSize: `${fontSize}px`, fontFamily: 'sans-serif',
+      fontSize: '34', fontFamily: 'sans-serif',
     }, total)
   );
 };
@@ -729,18 +723,21 @@ const CongesApp = () => {
             return React.createElement('div', {
               key: day,
               onClick: () => setJourAffiche(day),
-              className: `aspect-square rounded border-2 flex flex-col justify-between p-2 cursor-pointer ${
+              className: `aspect-square rounded border-2 flex flex-col cursor-pointer overflow-hidden ${
                 isToday ? 'bg-green-100 border-green-400 ring-2 ring-green-300' : 'bg-gray-50 border-gray-200'
               }`,
               title: absentsNames,
             },
-              React.createElement('span', { className:'text-xs font-bold text-gray-700' }, dateFormatted),
-              congesDuJour.length > 0 && React.createElement('div', {
-                className: 'flex items-center justify-center',
-                style: { minHeight: '40px' },
-              },
-                React.createElement(PieDisc, { congesDuJour })
-              )
+              React.createElement('span', {
+                className: 'text-xs font-bold text-gray-700 px-1 pt-1 shrink-0',
+              }, dateFormatted),
+              congesDuJour.length > 0
+                ? React.createElement('div', {
+                    className: 'flex-1 p-1 min-h-0',
+                  },
+                    React.createElement(PieDisc, { congesDuJour })
+                  )
+                : React.createElement('div', { className: 'flex-1' })
             );
           })
         )
