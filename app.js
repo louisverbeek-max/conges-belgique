@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.2.4";
+const APP_VERSION = "2.3.1";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -454,6 +454,9 @@ const CongesApp = () => {
   const [recurrences,  setRecurrences]  = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [saveError,    setSaveError]    = useState('');
+  // Pile d'annulation (max 5 entrées) : [{label, snapshot}, ...]
+  // Le plus récent est en tête (index 0).
+  const [undoStack,    setUndoStack]    = useState([]);
 
   const [newCollaborateur, setNewCollaborateur] = useState('');
   const [editingId,        setEditingId]        = useState(null);
@@ -541,9 +544,192 @@ const CongesApp = () => {
   };
 
   // ── Congés ponctuels ───────────────────────────────────────────────────────
+  // ── Undo (pile 5 niveaux) ───────────────────────────────────────────────────
+  const UNDO_MAX = 5;
+
+  /** Sauvegarde l'état courant de /conges en tête de pile avant une mutation. */
+  const pushUndo = (label) => {
+    setUndoStack(prev => [
+      { label, snapshot: [...conges] },
+      ...prev.slice(0, UNDO_MAX - 1)
+    ]);
+  };
+
+  /**
+   * Rejoue le snapshot en tête de pile :
+   *  1. Supprime tous les congés Firebase actuels
+   *  2. Réécrit ceux du snapshot
+   *  3. Dépile
+   */
+  const popUndo = async () => {
+    if (undoStack.length === 0) return;
+    const { label, snapshot } = undoStack[0];
+    setSaveError('');
+    try {
+      const current = await firebaseFetch('/conges').catch(() => null);
+      if (current) {
+        await Promise.all(
+          Object.keys(current).map(id => firebaseFetch(`/conges/${id}`, 'DELETE'))
+        );
+      }
+      await Promise.all(
+        snapshot.map(c => {
+          const { id, ...data } = c;
+          return firebaseFetch(`/conges/${id}`, 'PUT', data);
+        })
+      );
+      setUndoStack(prev => prev.slice(1));
+      chargerDonnees();
+    } catch (err) {
+      setSaveError('Erreur annulation : ' + err.message);
+    }
+  };
+
+  // ── Helpers chevauchement ───────────────────────────────────────────────────
+  /**
+   * Retourne la liste des dates (YYYY-MM-DD) comprises dans une plage.
+   */
+  const getDatesRange = (dateDebut, dateFin) => {
+    const dates = [];
+    const cur = new Date(dateDebut);
+    const fin = new Date(dateFin || dateDebut);
+    while (cur <= fin) {
+      dates.push(toLocalDateStr(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  };
+
+  /**
+   * Retourne les congés ponctuels (docs Firebase, pas jours éclatés)
+   * d'un employé qui chevauchent une plage de dates.
+   * filterType : si renseigné, ne garde que ce type.
+   */
+  const getChevauchements = (employe_id, dateDebut, dateFin, filterType = null) => {
+    const plage = new Set(getDatesRange(dateDebut, dateFin));
+    return conges.filter(c => {
+      if (c.employe_id !== employe_id) return false;
+      if (filterType && c.type !== filterType) return false;
+      // Chevauchement si au moins un jour commun
+      const joursConge = getDatesRange(c.dateDebut || c.date, c.dateFin || c.date);
+      return joursConge.some(d => plage.has(d));
+    });
+  };
+
+  /**
+   * Retourne les règles de temps partiel (récurrences) d'un employé
+   * qui produisent au moins un jour dans la plage.
+   */
+  const getRecurrencesChevauchement = (employe_id, dateDebut, dateFin) => {
+    const plage = new Set(getDatesRange(dateDebut, dateFin));
+    return recurrences.filter(rec => {
+      if (rec.employe_id !== employe_id) return false;
+      // Générer les jours de la récurrence sur la plage demandée
+      const debut = new Date(dateDebut);
+      const fin   = new Date(dateFin || dateDebut);
+      const debutRec = new Date(rec.dateDebut);
+      const finRec   = rec.dateFin ? new Date(rec.dateFin) : fin;
+      const start = debut > debutRec ? debut : debutRec;
+      const end   = fin   < finRec   ? fin   : finRec;
+      if (start > end) return false;
+      const days = expandRecurrence(rec,
+        start.getFullYear(), start.getMonth()
+      );
+      // Si la plage couvre plusieurs mois, vérifier aussi les autres mois
+      const months = new Set();
+      const cur = new Date(start);
+      while (cur <= end) {
+        months.add(`${cur.getFullYear()}-${cur.getMonth()}`);
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      let allDays = [];
+      months.forEach(m => {
+        const [y, mo] = m.split('-').map(Number);
+        allDays = allDays.concat(expandRecurrence(rec, y, mo));
+      });
+      return allDays.some(d => plage.has(d.date));
+    });
+  };
+
+  // ── Ajout congé avec vérifications métier ────────────────────────────────────
   const ajouterConge = async (e) => {
     e.preventDefault();
     setSaveError('');
+
+    const { employe_id, dateDebut, dateFin, type } = newConge;
+    const emp = employes.find(e => e.id === employe_id);
+    const nomEmp = emp?.nom ?? employe_id;
+    pushUndo(`Ajout ${type} — ${nomEmp}`);
+    const finEffective = dateFin || dateDebut;
+
+    // ── Cas 1 : MALADIE → chercher chevauchements avec congés normaux ──────────
+    if (type === 'Maladie') {
+      const congesNormaux = getChevauchements(employe_id, dateDebut, finEffective, 'Congé');
+      if (congesNormaux.length > 0) {
+        const listing = congesNormaux.map(c =>
+          `• ${c.dateDebut || c.date} → ${c.dateFin || c.date} (${c.nbJours || 1} jour(s))`
+        ).join('
+');
+        const annuler = window.confirm(
+          `⚠️ ${nomEmp} a déjà des congés sur cette période :
+
+${listing}
+
+` +
+          `Voulez-vous ANNULER ces congés et les remplacer par la maladie ?
+
+` +
+          `OK = Annuler les congés et enregistrer la maladie
+` +
+          `Annuler = Garder les deux`
+        );
+        if (annuler) {
+          try {
+            await Promise.all(
+              congesNormaux.map(c =>
+                firebaseFetch(`/conges/${c.id}`, 'DELETE')
+              )
+            );
+          } catch (err) {
+            setSaveError('Erreur lors de la suppression des congés : ' + err.message);
+            return;
+          }
+        }
+        // Dans les deux cas on continue et on enregistre la maladie
+      }
+    }
+
+    // ── Cas 2 : CONGÉ NORMAL → vérifier chevauchement avec temps partiel ──────
+    if (type === 'Congé') {
+      const recsChevauchants = getRecurrencesChevauchement(employe_id, dateDebut, finEffective);
+      if (recsChevauchants.length > 0) {
+        const listing = recsChevauchants.map(rec => {
+          const jourLabels = (jours) =>
+            (jours || []).map(d => JOURS_SEMAINE.find(j => j.value === d)?.label || d).join(', ');
+          const pattern = rec.pattern === 'weekly'
+            ? `Hebdo : ${jourLabels(rec.jours)}`
+            : `Paires : ${jourLabels(rec.joursP)} | Impaires : ${jourLabels(rec.joursI)}`;
+          return `• ${pattern} (du ${rec.dateDebut}${rec.dateFin ? ' au ' + rec.dateFin : ''})`;
+        }).join('
+');
+        const continuer = window.confirm(
+          `⚠️ ${nomEmp} a des jours de temps partiel sur cette période :
+
+${listing}
+
+` +
+          `Voulez-vous quand même encoder ce congé par-dessus ?
+
+` +
+          `OK = Oui, encoder le congé
+` +
+          `Annuler = Non, abandonner`
+        );
+        if (!continuer) return; // Abandon
+      }
+    }
+
+    // ── Enregistrement ─────────────────────────────────────────────────────────
     try {
       await saveConge(newConge);
       chargerDonnees();
@@ -552,6 +738,9 @@ const CongesApp = () => {
     } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
   };
   const supprimerConge = (id) => {
+    const cx = conges.find(x => x.id === id);
+    const ex = employes.find(e => e.id === cx?.employe_id);
+    pushUndo(`Suppression — ${ex?.nom ?? '?'}`);
     fetch(getFirebaseUrl(`/conges/${id}`), { method: 'DELETE' }).then(() => chargerDonnees());
   };
 
@@ -666,7 +855,22 @@ const CongesApp = () => {
             React.createElement('h1', { className:'text-2xl font-bold' }, 'RH — Gestion des Congés'),
             React.createElement('p', { className:'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
           ),
-          React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
+          React.createElement('div', { className:'flex items-center gap-3' },
+            undoStack.length > 0 && React.createElement('div', { className:'flex items-center gap-1' },
+              React.createElement('button', {
+                onClick: popUndo,
+                title: `Annuler : ${undoStack[0]?.label}`,
+                className: 'flex items-center gap-2 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-l-lg text-sm font-medium transition'
+              },
+                React.createElement('span', null, '↩'),
+                React.createElement('span', null, undoStack[0]?.label)
+              ),
+              React.createElement('span', {
+                className: 'px-2 py-2 bg-amber-200 text-amber-800 border border-l-0 border-amber-300 rounded-r-lg text-xs font-bold'
+              }, `${undoStack.length}/${UNDO_MAX}`)
+            ),
+            React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
+          )
         ),
         React.createElement('div', { className:'flex gap-2' },
           ['congés','temps partiel','collaborateurs'].map(page =>
