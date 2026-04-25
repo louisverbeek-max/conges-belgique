@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.1.1";
 
 // ===== FIREBASE CONFIG =====
 // Vos paramètres d'origine — inchangés
@@ -71,6 +71,113 @@ const ChevronLeft  = () => React.createElement('svg', { width:24, height:24, vie
 const ChevronRight = () => React.createElement('svg', { width:24, height:24, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('polyline', { points:'9 18 15 12 9 6' }));
 const LogOut       = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('path', { d:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4' }), React.createElement('polyline', { points:'16 17 21 12 16 7' }), React.createElement('line', { x1:21, y1:12, x2:9, y2:12 }));
 const Lock         = () => React.createElement('svg', { width:18, height:18, viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', strokeWidth:2 }, React.createElement('rect', { x:3, y:11, width:18, height:11, rx:2, ry:2 }), React.createElement('path', { d:'M7 11V7a5 5 0 0 1 10 0v4' }));
+
+// ===== COMPOSANT DISQUE CAMEMBERT =====
+/**
+ * Disque SVG proportionnel au nombre d'absents.
+ *   - 1 seul type  → disque uni coloré
+ *   - Types mixtes → secteurs proportionnels (camembert)
+ *   - Taille : 20px (1 absent) → 38px (6+ absents), chiffre blanc au centre
+ *
+ * Couleurs hex extraites des classes Tailwind des TYPES_CONFIG :
+ *   Congé         → #3b82f6 (blue-500)
+ *   Maladie       → #f97316 (orange-500)
+ *   Temps partiel → #eab308 (yellow-500)
+ */
+const TYPE_COLORS = {
+  'Conge':        '#3b82f6',
+  'Maladie':      '#f97316',
+  'Temps partiel':'#eab308',
+  'default':      '#6b7280',
+};
+
+const getTypeColor = (type) => {
+  if (!type) return TYPE_COLORS['default'];
+  const t = type.toString().trim().toLowerCase();
+  if (t.includes('maladie')) return TYPE_COLORS['Maladie'];
+  if (t.includes('partiel')) return TYPE_COLORS['Temps partiel'];
+  return TYPE_COLORS['Conge'];
+};
+
+/**
+ * Calcule le path d'un secteur de camembert.
+ * Angles en degrés, 0 = sommet (12h).
+ */
+const describeArc = (cx, cy, r, startAngle, endAngle) => {
+  const toRad = (deg) => (deg - 90) * Math.PI / 180;
+  const x1 = cx + r * Math.cos(toRad(startAngle));
+  const y1 = cy + r * Math.sin(toRad(startAngle));
+  const x2 = cx + r * Math.cos(toRad(endAngle));
+  const y2 = cy + r * Math.sin(toRad(endAngle));
+  const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+};
+
+const PieDisc = ({ congesDuJour }) => {
+  const total = congesDuJour.length;
+  // Taille dynamique : 20px pour 1 absent, +4px par absent, max 38px
+  const size = Math.min(38, 20 + (total - 1) * 4);
+  const r    = size / 2 - 0.5;
+  const cx   = size / 2;
+  const cy   = size / 2;
+
+  // Compter par type
+  const counts = {};
+  congesDuJour.forEach(c => {
+    const key = c.type || 'Conge';
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const types = Object.keys(counts);
+
+  const fontSize = size <= 24 ? Math.round(size * 0.38) : Math.round(size * 0.34);
+
+  // Disque uni si 1 seul type présent
+  if (types.length === 1) {
+    return React.createElement('svg', {
+      width: size, height: size,
+      viewBox: `0 0 ${size} ${size}`,
+      style: { display: 'block' },
+    },
+      React.createElement('circle', { cx, cy, r, fill: getTypeColor(types[0]) }),
+      React.createElement('text', {
+        x: cx, y: cy,
+        textAnchor: 'middle', dominantBaseline: 'central',
+        fill: 'white', fontWeight: 'bold',
+        fontSize: `${fontSize}px`, fontFamily: 'sans-serif',
+      }, total)
+    );
+  }
+
+  // Camembert multi-types
+  const sectors = [];
+  let startAngle = 0;
+  types.forEach((type, i) => {
+    const slice    = (counts[type] / total) * 360;
+    const endAngle = startAngle + (slice >= 360 ? 359.99 : slice);
+    sectors.push(
+      React.createElement('path', {
+        key: i,
+        d:    describeArc(cx, cy, r, startAngle, endAngle),
+        fill: getTypeColor(type),
+      })
+    );
+    startAngle += slice;
+  });
+
+  return React.createElement('svg', {
+    width: size, height: size,
+    viewBox: `0 0 ${size} ${size}`,
+    style: { display: 'block' },
+  },
+    ...sectors,
+    React.createElement('text', {
+      x: cx, y: cy,
+      textAnchor: 'middle', dominantBaseline: 'central',
+      fill: 'white', fontWeight: 'bold',
+      fontSize: `${fontSize}px`, fontFamily: 'sans-serif',
+    }, total)
+  );
+};
 
 // ===== LOGIQUE CONGÉS =====
 
@@ -616,7 +723,6 @@ const CongesApp = () => {
             const day          = i + 1;
             const congesDuJour = isDateInConges(day);
             const isToday      = day === aujourd_hui.getDate() && moisActuel.getMonth() === aujourd_hui.getMonth() && moisActuel.getFullYear() === aujourd_hui.getFullYear();
-            const cfg          = congesDuJour.length > 0 ? getTypeConfig(congesDuJour[0].type) : null;
             const dateFormatted = `${String(day).padStart(2,'0')}/${String(moisActuel.getMonth()+1).padStart(2,'0')}`;
             const absentsNames  = getAbsentsNames(day);
 
@@ -624,17 +730,16 @@ const CongesApp = () => {
               key: day,
               onClick: () => setJourAffiche(day),
               className: `aspect-square rounded border-2 flex flex-col justify-between p-2 cursor-pointer ${
-                isToday ? 'bg-green-100 border-green-400 ring-2 ring-green-300' :
-                cfg ? `${cfg.color} ${cfg.border}` : 'bg-gray-50 border-gray-200'
+                isToday ? 'bg-green-100 border-green-400 ring-2 ring-green-300' : 'bg-gray-50 border-gray-200'
               }`,
               title: absentsNames,
             },
               React.createElement('span', { className:'text-xs font-bold text-gray-700' }, dateFormatted),
-              congesDuJour.length > 0 && React.createElement('div', { className:'flex items-center justify-center' },
-                React.createElement('span', {
-                  className:'bg-gray-700 text-white text-xs font-bold px-2 py-1 rounded-full',
-                  title: absentsNames
-                }, congesDuJour.length)
+              congesDuJour.length > 0 && React.createElement('div', {
+                className: 'flex items-center justify-center',
+                style: { minHeight: '40px' },
+              },
+                React.createElement(PieDisc, { congesDuJour })
               )
             );
           })
