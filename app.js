@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.5.0";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -441,74 +441,80 @@ const FormulaireRecurrence = ({
   );
 };
 
-// ===== MINI-AGENDA EMPLOYÉ =====
-const MiniAgendaEmploye = ({ employe_id, congesJours, joursRecurrents, moisBase }) => {
-  if (!employe_id) return null;
-  const MN = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const DN = ['L','M','M','J','V','S','D'];
-  const cellBg = (type) => {
-    if (!type) return null;
-    const t = type.toLowerCase();
-    if (t.includes('maladie')) return '#fed7aa';
-    if (t.includes('partiel')) return '#fef08a';
-    return '#bfdbfe';
+// ===== MINI-AGENDA EMPLOYÉ (4 mois) + AGENDA TOUS =====
+
+const MiniPie=({congesDuJour})=>{
+  const total=congesDuJour.length; if(total===0)return null;
+  const cx=50,cy=50,r=46,counts={};
+  congesDuJour.forEach(j=>{const k=j.type||'Congé';counts[k]=(counts[k]||0)+1;});
+  const types=Object.keys(counts),elems=[];
+  if(types.length===1){elems.push(React.createElement('circle',{key:'c',cx,cy,r,fill:getTypeColor(types[0])}));}
+  else{let sa=0;types.forEach((t,i)=>{const sl=(counts[t]/total)*360,ea=sa+(sl>=360?359.99:sl);
+    elems.push(React.createElement('path',{key:i,d:describeArc(cx,cy,r,sa,ea),fill:getTypeColor(t)}));sa+=sl;});}
+  elems.push(React.createElement('text',{key:'t',x:cx,y:cy,textAnchor:'middle',dominantBaseline:'central',fill:'white',fontWeight:'bold',fontSize:'28',fontFamily:'sans-serif'},total));
+  return React.createElement('svg',{viewBox:'0 0 100 100',style:{display:'block',width:'100%',height:'100%'}},...elems);
+};
+
+const MiniAgendaEmploye=({employe_id,congesJours,joursRecurrents,tousLesJours,moisBase})=>{
+  const MN=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const DN=['L','M','M','J','V','S','D'],today=new Date();
+  const cellBg=t=>{if(!t)return null;const s=t.toLowerCase();if(s.includes('maladie'))return '#fed7aa';if(s.includes('partiel'))return '#fef08a';return '#bfdbfe';};
+  const mkGrid=(year,month)=>{
+    const f=new Date(year,month,1).getDay(),offset=f===0?6:f-1;
+    const dim=new Date(year,month+1,0).getDate();
+    const isT=d=>d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
+    const cells=[];for(let i=0;i<offset;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+    const ds=d=>year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    return {cells,isT,ds};
   };
-  const today = new Date();
-  const renderMonth = (year, month) => {
-    const dim    = new Date(year, month+1, 0).getDate();
-    const first  = new Date(year, month, 1).getDay();
-    const offset = first === 0 ? 6 : first - 1;
-    const dateMap = {};
-    [...congesJours, ...joursRecurrents].forEach(j => {
-      if (j.employe_id !== employe_id || !j.date) return;
-      const [y,m] = j.date.split('-').map(Number);
-      if (y === year && m === month+1) dateMap[j.date] = j.type || 'Congé';
-    });
-    const cells = [];
-    for (let i=0; i<offset; i++) cells.push(null);
-    for (let d=1; d<=dim; d++) cells.push(d);
-    const isToday = (d) => d===today.getDate() && month===today.getMonth() && year===today.getFullYear();
-    return React.createElement('div', { key:year+'-'+month, style:{flex:1,minWidth:0} },
-      React.createElement('div', { style:{textAlign:'center',fontWeight:'700',fontSize:'11px',marginBottom:'6px',color:'#1e40af'} },
-        MN[month] + ' ' + year
-      ),
-      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'} },
-        DN.map((d,i) => React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'8px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280',padding:'1px 0'}},d))
-      ),
-      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px'} },
-        cells.map((d,i) => {
-          if (!d) return React.createElement('div',{key:'e'+i});
-          const ds   = year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-          const type = dateMap[ds];
-          const bg   = type ? cellBg(type) : (isToday(d) ? '#d1fae5' : '#f3f4f6');
-          const brd  = isToday(d) ? '2px solid #34d399' : '1px solid #e5e7eb';
-          return React.createElement('div',{
-            key:d, title: type||'',
-            style:{textAlign:'center',fontSize:'9px',fontWeight:type?'700':'400',
-              padding:'4px 1px',borderRadius:'3px',background:bg,border:brd,
-              color:type?'#1f2937':'#9ca3af',lineHeight:'1',cursor:'default'}
-          }, d);
+  const renderIndiv=(year,month)=>{
+    const {cells,isT,ds}=mkGrid(year,month);
+    const dm={};
+    [...congesJours,...joursRecurrents].forEach(j=>{if(j.employe_id!==employe_id||!j.date)return;const[y,m]=j.date.split('-').map(Number);if(y===year&&m===month+1)dm[j.date]=j.type||'Congé';});
+    return React.createElement('div',{key:year+'-'+month,style:{minWidth:0}},
+      React.createElement('div',{style:{textAlign:'center',fontWeight:'700',fontSize:'11px',marginBottom:'4px',color:'#1e40af'}},MN[month]+' '+year),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'}},DN.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'8px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280'}},d))),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px'}},
+        cells.map((d,i)=>{
+          if(!d)return React.createElement('div',{key:'e'+i});
+          const type=dm[ds(d)];
+          return React.createElement('div',{key:d,title:type||'',style:{textAlign:'center',fontSize:'9px',fontWeight:type?'700':'400',padding:'4px 1px',borderRadius:'3px',background:type?cellBg(type):(isT(d)?'#d1fae5':'#f3f4f6'),border:isT(d)?'2px solid #34d399':'1px solid #e5e7eb',color:type?'#1f2937':'#9ca3af',lineHeight:'1'}},d);
         })
       )
     );
   };
-  const y0=moisBase.getFullYear(), m0=moisBase.getMonth();
-  const y1=m0===11?y0+1:y0, m1=(m0+1)%12;
-  return React.createElement('div', { className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-blue-400' },
-    React.createElement('div', { style:{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'} },
-      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Agenda'),
-      [['Congé','#bfdbfe'],['Maladie','#fed7aa'],['Temps partiel','#fef08a']].map(([lbl,bg]) =>
-        React.createElement('div',{key:lbl,style:{display:'flex',alignItems:'center',gap:'3px',fontSize:'10px',color:'#374151'}},
-          React.createElement('div',{style:{width:'10px',height:'10px',background:bg,borderRadius:'2px',border:'1px solid #d1d5db'}}),
-          lbl
-        )
+  const renderTous=(year,month)=>{
+    const {cells,isT,ds}=mkGrid(year,month);
+    const getJ=d=>(tousLesJours||[]).filter(j=>j.date===ds(d));
+    return React.createElement('div',{key:'t'+year+'-'+month},
+      React.createElement('div',{style:{textAlign:'center',fontWeight:'700',fontSize:'12px',marginBottom:'6px',color:'#374151'}},MN[month]+' '+year+' — Tous'),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'}},DN.map((d,i)=>React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'9px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280'}},d))),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px'}},
+        cells.map((d,i)=>{
+          if(!d)return React.createElement('div',{key:'e'+i});
+          const abs=getJ(d);
+          return React.createElement('div',{key:d,style:{position:'relative',borderRadius:'4px',aspectRatio:'1',border:isT(d)?'2px solid #34d399':'1px solid #e5e7eb',background:isT(d)?'#d1fae5':'#f9fafb',overflow:'hidden'}},
+            React.createElement('span',{style:{position:'absolute',top:'2px',left:'3px',fontSize:'8px',fontWeight:'700',color:'#374151',zIndex:1}},d),
+            abs.length>0&&React.createElement('div',{style:{position:'absolute',bottom:'2px',left:'2px',right:'2px',top:'13px'}},React.createElement(MiniPie,{congesDuJour:abs}))
+          );
+        })
       )
-    ),
-    React.createElement('div',{style:{display:'flex',gap:'12px'}},
-      renderMonth(y0,m0),
-      renderMonth(y1,m1)
-    )
+    );
+  };
+  const legende=[['Congé','#bfdbfe'],['Maladie','#fed7aa'],['Temps partiel','#fef08a']].map(([lbl,bg])=>
+    React.createElement('div',{key:lbl,style:{display:'flex',alignItems:'center',gap:'3px',fontSize:'10px',color:'#374151'}},
+      React.createElement('div',{style:{width:'10px',height:'10px',background:bg,borderRadius:'2px',border:'1px solid #d1d5db'}}),lbl)
   );
+  const y0=moisBase.getFullYear(),m0=moisBase.getMonth();
+  const months4=Array.from({length:4},(_,i)=>({y:y0+Math.floor((m0+i)/12),m:(m0+i)%12}));
+  if(!employe_id)return React.createElement('div',{className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-gray-400'},
+    React.createElement('div',{style:{display:'flex',gap:'8px',marginBottom:'10px',alignItems:'center',flexWrap:'wrap'}},
+      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Vue d\'ensemble'),...legende),
+    renderTous(y0,m0));
+  return React.createElement('div',{className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-blue-400'},
+    React.createElement('div',{style:{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'}},
+      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Agenda'),...legende),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'16px'}},months4.map(({y,m})=>renderIndiv(y,m))));
 };
 
 const CongesApp = () => {
@@ -902,7 +908,7 @@ const CongesApp = () => {
               value:newConge.employe_id, onChange:e=>setNewConge({...newConge,employe_id:e.target.value}),
               className:'w-full px-3 py-2 border rounded text-sm'
             },
-              React.createElement('option',{value:''},'Sélectionner…'),
+              React.createElement('option',{value:''},'Tous'),
               employes.map(e=>React.createElement('option',{key:e.id,value:e.id},e.nom))
             ),
             React.createElement('select', {
@@ -934,10 +940,11 @@ const CongesApp = () => {
           )
         ),
 
-        newConge.employe_id && React.createElement(MiniAgendaEmploye, {
+        React.createElement(MiniAgendaEmploye, {
           employe_id: newConge.employe_id,
           congesJours: congesJours,
           joursRecurrents: joursRecurrents,
+          tousLesJours: tousLesJours,
           moisBase: new Date()
         }),
 
@@ -963,18 +970,28 @@ const CongesApp = () => {
             ),
             React.createElement('div', { className:'bg-white rounded shadow p-6' },
               React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Statistiques'),
-              React.createElement('div', { className:'space-y-2 text-sm' },
-                React.createElement('p', null, `👥 Collaborateurs : ${employes.length}`),
-                React.createElement('p', null, `📋 Congés ponctuels : ${conges.length}`),
-                React.createElement('p', null, `⏰ Temps partiels actifs : ${recurrences.length}`),
-                React.createElement('p', null, `🏠 Absents aujourd'hui : ${getTodayAbsents().length}`)
-              )
+              React.createElement('div', { className:'space-y-2 text-sm' }, (()=>{
+                const eid=newConge.employe_id;
+                const empNom=eid?employes.find(e=>e.id===eid)?.nom:null;
+                const cf=eid?conges.filter(cx=>cx.employe_id===eid):conges;
+                const rf=eid?recurrences.filter(r=>r.employe_id===eid):recurrences;
+                const at=getTodayAbsents().filter(a=>eid?a.employe.id===eid:true);
+                return [
+                  empNom&&React.createElement('p',{key:'n',className:'font-semibold text-blue-700'},'👤 '+empNom),
+                  !eid&&React.createElement('p',{key:'c'},'👥 Collaborateurs : '+employes.length),
+                  React.createElement('p',{key:'cp'},'📋 Congés : '+cf.length),
+                  React.createElement('p',{key:'tp'},'⏰ Temps partiels : '+rf.length),
+                  React.createElement('p',{key:'ab'},'🏠 Absents aujourd\'hui : '+at.length),
+                ];
+              })())
             )
           ),
 
           React.createElement('div', { className:'bg-white rounded shadow p-6' },
-            React.createElement('h3', { className:'font-bold text-lg mb-4' }, 'Congés ponctuels enregistrés'),
-            conges.length===0
+            React.createElement('h3', { className:'font-bold text-lg mb-4' },
+              newConge.employe_id ? 'Congés de '+(employes.find(e=>e.id===newConge.employe_id)?.nom||'?') : 'Congés ponctuels enregistrés'),
+            (()=>{ const listeAff=newConge.employe_id?conges.filter(cx=>cx.employe_id===newConge.employe_id):conges;
+            return listeAff.length===0
               ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucun.')
               : React.createElement('table',{className:'w-full text-sm border-collapse'},
                   React.createElement('thead',null,
@@ -983,7 +1000,7 @@ const CongesApp = () => {
                     )
                   ),
                   React.createElement('tbody',null,
-                    conges.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(c=>{
+                    listeAff.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(c=>{
                       const emp=employes.find(e=>e.id===c.employe_id);
                       const cfg=getTypeConfig(c.type);
                       return React.createElement('tr',{key:c.id,className:'border-t hover:bg-gray-50'},
@@ -1005,7 +1022,8 @@ const CongesApp = () => {
                     })
                   )
                 )
-          )
+          );
+          })()
         )
       ),
 
