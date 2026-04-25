@@ -454,9 +454,7 @@ const CongesApp = () => {
   const [recurrences,  setRecurrences]  = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [saveError,    setSaveError]    = useState('');
-  // Pile d'annulation (max 5 entrées) : [{label, snapshot}, ...]
-  // Le plus récent est en tête (index 0).
-  const [undoStack,    setUndoStack]    = useState([]);
+  const [undoStack,    setUndoStack]    = useState([]); // pile undo max 5
 
   const [newCollaborateur, setNewCollaborateur] = useState('');
   const [editingId,        setEditingId]        = useState(null);
@@ -544,10 +542,9 @@ const CongesApp = () => {
   };
 
   // ── Congés ponctuels ───────────────────────────────────────────────────────
-  // ── Undo (pile 5 niveaux) ───────────────────────────────────────────────────
+  // ── Pile Undo (5 niveaux) ───────────────────────────────────────────────────
   const UNDO_MAX = 5;
 
-  /** Sauvegarde l'état courant de /conges en tête de pile avant une mutation. */
   const pushUndo = (label) => {
     setUndoStack(prev => [
       { label, snapshot: [...conges] },
@@ -555,29 +552,19 @@ const CongesApp = () => {
     ]);
   };
 
-  /**
-   * Rejoue le snapshot en tête de pile :
-   *  1. Supprime tous les congés Firebase actuels
-   *  2. Réécrit ceux du snapshot
-   *  3. Dépile
-   */
   const popUndo = async () => {
     if (undoStack.length === 0) return;
-    const { label, snapshot } = undoStack[0];
+    const { snapshot } = undoStack[0];
     setSaveError('');
     try {
       const current = await firebaseFetch('/conges').catch(() => null);
       if (current) {
-        await Promise.all(
-          Object.keys(current).map(id => firebaseFetch(`/conges/${id}`, 'DELETE'))
-        );
+        await Promise.all(Object.keys(current).map(id => firebaseFetch(`/conges/${id}`, 'DELETE')));
       }
-      await Promise.all(
-        snapshot.map(c => {
-          const { id, ...data } = c;
-          return firebaseFetch(`/conges/${id}`, 'PUT', data);
-        })
-      );
+      await Promise.all(snapshot.map(c => {
+        const { id, ...data } = c;
+        return firebaseFetch(`/conges/${id}`, 'PUT', data);
+      }));
       setUndoStack(prev => prev.slice(1));
       chargerDonnees();
     } catch (err) {
@@ -585,7 +572,7 @@ const CongesApp = () => {
     }
   };
 
-  // ── Helpers chevauchement ───────────────────────────────────────────────────
+    // ── Helpers chevauchement ───────────────────────────────────────────────────
   /**
    * Retourne la liste des dates (YYYY-MM-DD) comprises dans une plage.
    */
@@ -659,7 +646,6 @@ const CongesApp = () => {
     const { employe_id, dateDebut, dateFin, type } = newConge;
     const emp = employes.find(e => e.id === employe_id);
     const nomEmp = emp?.nom ?? employe_id;
-    pushUndo(`Ajout ${type} — ${nomEmp}`);
     const finEffective = dateFin || dateDebut;
 
     // ── Cas 1 : MALADIE → chercher chevauchements avec congés normaux ──────────
@@ -684,6 +670,7 @@ ${listing}
           `Annuler = Garder les deux`
         );
         if (annuler) {
+          pushUndo('Remplacement maladie — ' + nomEmp);
           try {
             await Promise.all(
               congesNormaux.map(c =>
@@ -731,6 +718,7 @@ ${listing}
 
     // ── Enregistrement ─────────────────────────────────────────────────────────
     try {
+      pushUndo('Ajout ' + newConge.type + ' — ' + (employes.find(e=>e.id===newConge.employe_id)?.nom ?? newConge.employe_id));
       await saveConge(newConge);
       chargerDonnees();
       setNewConge({ employe_id:'', dateDebut:'', dateFin:'', type:'Congé', demi_journee:'' });
@@ -738,9 +726,9 @@ ${listing}
     } catch (err) { setSaveError(err.message); alert('Erreur: ' + err.message); }
   };
   const supprimerConge = (id) => {
-    const cx = conges.find(x => x.id === id);
-    const ex = employes.find(e => e.id === cx?.employe_id);
-    pushUndo(`Suppression — ${ex?.nom ?? '?'}`);
+    const _cx = conges.find(x => x.id === id);
+    const _ex = employes.find(e => e.id === _cx?.employe_id);
+    pushUndo('Suppression — ' + (_ex?.nom ?? '?'));
     fetch(getFirebaseUrl(`/conges/${id}`), { method: 'DELETE' }).then(() => chargerDonnees());
   };
 
@@ -856,18 +844,18 @@ ${listing}
             React.createElement('p', { className:'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
           ),
           React.createElement('div', { className:'flex items-center gap-3' },
-            undoStack.length > 0 && React.createElement('div', { className:'flex items-center gap-1' },
+            undoStack.length > 0 && React.createElement('div', { className:'flex items-center' },
               React.createElement('button', {
                 onClick: popUndo,
-                title: `Annuler : ${undoStack[0]?.label}`,
+                title: undoStack[0]?.label,
                 className: 'flex items-center gap-2 px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-l-lg text-sm font-medium transition'
               },
                 React.createElement('span', null, '↩'),
-                React.createElement('span', null, undoStack[0]?.label)
+                React.createElement('span', { className:'max-w-48 truncate' }, undoStack[0]?.label)
               ),
               React.createElement('span', {
-                className: 'px-2 py-2 bg-amber-200 text-amber-800 border border-l-0 border-amber-300 rounded-r-lg text-xs font-bold'
-              }, `${undoStack.length}/${UNDO_MAX}`)
+                className: 'px-2 py-2 bg-amber-200 text-amber-900 border border-l-0 border-amber-300 rounded-r-lg text-xs font-bold'
+              }, undoStack.length + '/' + UNDO_MAX)
             ),
             React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
           )
