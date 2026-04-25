@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.3.2";
+const APP_VERSION = "2.4.0";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -441,6 +441,76 @@ const FormulaireRecurrence = ({
   );
 };
 
+// ===== MINI-AGENDA EMPLOYÉ =====
+const MiniAgendaEmploye = ({ employe_id, congesJours, joursRecurrents, moisBase }) => {
+  if (!employe_id) return null;
+  const MN = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const DN = ['L','M','M','J','V','S','D'];
+  const cellBg = (type) => {
+    if (!type) return null;
+    const t = type.toLowerCase();
+    if (t.includes('maladie')) return '#fed7aa';
+    if (t.includes('partiel')) return '#fef08a';
+    return '#bfdbfe';
+  };
+  const today = new Date();
+  const renderMonth = (year, month) => {
+    const dim    = new Date(year, month+1, 0).getDate();
+    const first  = new Date(year, month, 1).getDay();
+    const offset = first === 0 ? 6 : first - 1;
+    const dateMap = {};
+    [...congesJours, ...joursRecurrents].forEach(j => {
+      if (j.employe_id !== employe_id || !j.date) return;
+      const [y,m] = j.date.split('-').map(Number);
+      if (y === year && m === month+1) dateMap[j.date] = j.type || 'Congé';
+    });
+    const cells = [];
+    for (let i=0; i<offset; i++) cells.push(null);
+    for (let d=1; d<=dim; d++) cells.push(d);
+    const isToday = (d) => d===today.getDate() && month===today.getMonth() && year===today.getFullYear();
+    return React.createElement('div', { key:year+'-'+month, style:{flex:1,minWidth:0} },
+      React.createElement('div', { style:{textAlign:'center',fontWeight:'700',fontSize:'11px',marginBottom:'6px',color:'#1e40af'} },
+        MN[month] + ' ' + year
+      ),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',marginBottom:'2px'} },
+        DN.map((d,i) => React.createElement('div',{key:i,style:{textAlign:'center',fontSize:'8px',fontWeight:'700',color:i>=5?'#9ca3af':'#6b7280',padding:'1px 0'}},d))
+      ),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px'} },
+        cells.map((d,i) => {
+          if (!d) return React.createElement('div',{key:'e'+i});
+          const ds   = year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+          const type = dateMap[ds];
+          const bg   = type ? cellBg(type) : (isToday(d) ? '#d1fae5' : '#f3f4f6');
+          const brd  = isToday(d) ? '2px solid #34d399' : '1px solid #e5e7eb';
+          return React.createElement('div',{
+            key:d, title: type||'',
+            style:{textAlign:'center',fontSize:'9px',fontWeight:type?'700':'400',
+              padding:'4px 1px',borderRadius:'3px',background:bg,border:brd,
+              color:type?'#1f2937':'#9ca3af',lineHeight:'1',cursor:'default'}
+          }, d);
+        })
+      )
+    );
+  };
+  const y0=moisBase.getFullYear(), m0=moisBase.getMonth();
+  const y1=m0===11?y0+1:y0, m1=(m0+1)%12;
+  return React.createElement('div', { className:'bg-white rounded shadow p-4 mt-4 border-t-4 border-blue-400' },
+    React.createElement('div', { style:{display:'flex',gap:'8px',marginBottom:'8px',flexWrap:'wrap',alignItems:'center'} },
+      React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color:'#6b7280',textTransform:'uppercase',letterSpacing:'.5px'}},'Agenda'),
+      [['Congé','#bfdbfe'],['Maladie','#fed7aa'],['Temps partiel','#fef08a']].map(([lbl,bg]) =>
+        React.createElement('div',{key:lbl,style:{display:'flex',alignItems:'center',gap:'3px',fontSize:'10px',color:'#374151'}},
+          React.createElement('div',{style:{width:'10px',height:'10px',background:bg,borderRadius:'2px',border:'1px solid #d1d5db'}}),
+          lbl
+        )
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',gap:'12px'}},
+      renderMonth(y0,m0),
+      renderMonth(y1,m1)
+    )
+  );
+};
+
 const CongesApp = () => {
   const [currentUser,    setCurrentUser]    = useState(null);
   const [showRHLogin,    setShowRHLogin]    = useState(false);
@@ -625,7 +695,25 @@ const CongesApp = () => {
         if (window.confirm(msg)) {
           pushUndo('Remplacement maladie — ' + nomEmp);
           try {
-            await Promise.all(normaux.map(cx => firebaseFetch('/conges/' + cx.id, 'DELETE')));
+            const malDebut = new Date(dateDebut);
+            const malFin   = new Date(finEff);
+            await Promise.all(normaux.map(async cx => {
+              const cxD = new Date(cx.dateDebut || cx.date);
+              const cxF = new Date(cx.dateFin   || cx.date);
+              await firebaseFetch('/conges/' + cx.id, 'DELETE');
+              if (cxD < malDebut) {
+                const avFin = new Date(malDebut); avFin.setDate(avFin.getDate() - 1);
+                await saveConge({ employe_id:cx.employe_id, type:cx.type,
+                  dateDebut:toLocalDateStr(cxD), dateFin:toLocalDateStr(avFin),
+                  nbJours: Math.round((avFin-cxD)/86400000)+1 });
+              }
+              if (cxF > malFin) {
+                const apD = new Date(malFin); apD.setDate(apD.getDate() + 1);
+                await saveConge({ employe_id:cx.employe_id, type:cx.type,
+                  dateDebut:toLocalDateStr(apD), dateFin:toLocalDateStr(cxF),
+                  nbJours: Math.round((cxF-apD)/86400000)+1 });
+              }
+            }));
           } catch (err) { setSaveError('Erreur suppression : ' + err.message); return; }
         }
       }
@@ -845,6 +933,13 @@ const CongesApp = () => {
             }, 'Ajouter')
           )
         ),
+
+        newConge.employe_id && React.createElement(MiniAgendaEmploye, {
+          employe_id: newConge.employe_id,
+          congesJours: congesJours,
+          joursRecurrents: joursRecurrents,
+          moisBase: new Date()
+        }),
 
         React.createElement('div', { className:'col-span-2 space-y-6' },
           React.createElement('div', { className:'grid grid-cols-2 gap-6' },
