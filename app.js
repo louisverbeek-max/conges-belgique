@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.6";
+const APP_VERSION = "2.6.7";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -958,7 +958,8 @@ const CongesApp = () => {
               }, undoStack.length + '/' + UNDO_MAX)
             ),
             React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
-          )
+          ),
+          React.createElement('p',{className:'text-xs text-gray-300 text-right mt-1'},'© Louis Verbeek')
         ),
         React.createElement('div', { className:'flex gap-2' },
           ['congés','temps partiel','collaborateurs'].map(page =>
