@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.7";
+const APP_VERSION = "2.6.8";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -941,7 +941,7 @@ const CongesApp = () => {
         React.createElement('div', { className:'flex justify-between items-center mb-4' },
           React.createElement('div', null,
             React.createElement('h1', { className:'text-2xl font-bold' }, 'RH — Gestion des Congés'),
-            React.createElement('p', { className:'text-sm text-gray-600' }, `${String(aujourd_hui.getDate()).padStart(2,'0')+'/'+String(aujourd_hui.getMonth()+1).padStart(2,'0')+'/'+aujourd_hui.getFullYear()} | v${APP_VERSION}`)
+            React.createElement('p', { className:'text-sm text-gray-600' }, `${String(aujourd_hui.getDate()).padStart(2,'0')+'/'+String(aujourd_hui.getMonth()+1).padStart(2,'0')+'/'+aujourd_hui.getFullYear()} | v${APP_VERSION}  |  © Louis Verbeek`)
           ),
           React.createElement('div', { className:'flex items-center gap-3' },
             undoStack.length > 0 && React.createElement('div', { className:'flex items-center' },
@@ -958,8 +958,7 @@ const CongesApp = () => {
               }, undoStack.length + '/' + UNDO_MAX)
             ),
             React.createElement('button', { onClick:handleLogout, className:'px-4 py-2 bg-red-50 text-red-700 rounded-lg flex items-center gap-2' }, React.createElement(LogOut), 'Déco')
-          ),
-          React.createElement('p',{className:'text-xs text-gray-300 text-right mt-1'},'© Louis Verbeek')
+          )
         ),
         React.createElement('div', { className:'flex gap-2' },
           ['congés','temps partiel','collaborateurs'].map(page =>
@@ -1220,8 +1219,7 @@ const CongesApp = () => {
           React.createElement('p',{className:'text-sm text-gray-600'},String(aujourd_hui.getDate()).padStart(2,'0')+'/'+String(aujourd_hui.getMonth()+1).padStart(2,'0')+'/'+aujourd_hui.getFullYear())
         ),
         React.createElement('div', { className:'flex items-center gap-4' },
-          React.createElement('span',{className:'text-xs text-gray-500'},`v${APP_VERSION}`),
-          React.createElement('span',{className:'text-xs text-gray-300 ml-2'},'© Louis Verbeek'),
+          React.createElement('span',{className:'text-xs text-gray-500'},`v${APP_VERSION}  |  © Louis Verbeek`),
           React.createElement('button',{onClick:()=>setShowRHLogin(true),className:'px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2'},React.createElement(Lock),' RH')
         )
       )
