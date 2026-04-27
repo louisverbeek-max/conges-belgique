@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.2";
+const APP_VERSION = "2.6.3";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -1198,6 +1198,11 @@ const CongesApp = () => {
     )
   );
 
+  const AbsenceDisc=({count})=>React.createElement('svg',{viewBox:'0 0 100 100',style:{display:'block',width:'100%',height:'100%'}},
+    React.createElement('circle',{cx:50,cy:50,r:46,fill:'#64748b'}),
+    React.createElement('text',{x:50,y:50,textAnchor:'middle',dominantBaseline:'central',fill:'white',fontWeight:'bold',fontSize:'34',fontFamily:'sans-serif'},count)
+  );
+
   // ── Vue publique (calendrier) ──────────────────────────────────────────────
   return React.createElement('div', { className:'min-h-screen bg-gray-50' },
     React.createElement('div', { className:'bg-white shadow-sm border-b' },
@@ -1217,15 +1222,10 @@ const CongesApp = () => {
 
       // Légende
       React.createElement('div', { className:'flex gap-3 mb-4 flex-wrap' },
-        Object.entries(TYPES_CONFIG).map(([type, cfg]) =>
-          React.createElement('div', { key:type, className:`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${cfg.color} ${cfg.text}` },
-            cfg.icon, ' ', type
+          React.createElement('div', { className:'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-700' },
+            '🚫 Absent'
           )
         ),
-        React.createElement('div', { className:'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700' },
-          '⏰ Temps partiel'
-        )
-      ),
 
       // Absents du jour sélectionné
       React.createElement('div', { className:'bg-white rounded shadow p-6 mb-6' },
@@ -1235,17 +1235,14 @@ const CongesApp = () => {
         getAbsentsOfDay(jourAffiche).length===0
           ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucune absence ce jour')
           : getAbsentsOfDay(jourAffiche).map((a,i)=>{
-              const cfg=getTypeConfig(a.type);
-              return React.createElement('div',{key:i,className:`flex gap-3 p-3 rounded border ${cfg.color} ${cfg.border} mb-2`},
-                React.createElement('span',null,cfg.icon),
+              return React.createElement('div',{key:i,className:'flex gap-3 p-3 rounded border bg-slate-100 border-slate-300 mb-2'},
+                React.createElement('span',null,'🚫'),
                 React.createElement('div',null,
-                  React.createElement('p',{className:'font-medium text-sm'},
-                    a.employe.nom, a.isRecurrent ? ' ⏰' : ''
-                  ),
-                  React.createElement('p',{className:`text-xs ${cfg.text}`},
+                  React.createElement('p',{className:'font-medium text-sm text-slate-700'},a.employe.nom),
+                  React.createElement('p',{className:'text-xs text-slate-500'},
                     a.demi_journee
-                      ? `${a.type} — ${a.demi_journee==='AM'?'☀️ Matin':'🌙 Après-midi'} : ${a.dateDebut} → ${a.dateFin}`
-                      : `${a.type} : ${a.dateDebut} → ${a.dateFin}`
+                      ? (a.demi_journee==='AM'?'☀️ Matin':'🌙 Après-midi')+' : '+a.dateDebut+' → '+a.dateFin
+                      : 'Absent : '+a.dateDebut+' → '+a.dateFin
                   )
                 )
               );
@@ -1280,7 +1277,7 @@ const CongesApp = () => {
             },
               React.createElement('span',{className:'text-xs font-bold text-gray-700 px-1 pt-1 shrink-0'},dateFormatted),
               congesDuJour.length>0
-                ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(PieDisc,{congesDuJour}))
+                ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(AbsenceDisc,{count:congesDuJour.length}))
                 : React.createElement('div',{className:'flex-1'})
             );
           })
@@ -1318,7 +1315,7 @@ const CongesApp = () => {
                 },
                   React.createElement('span',{className:'text-xs font-bold text-gray-500 px-1 pt-1 shrink-0'},fmt),
                   absNxt.length>0
-                    ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(PieDisc,{congesDuJour:absNxt}))
+                    ? React.createElement('div',{className:'flex-1 p-1 min-h-0'},React.createElement(AbsenceDisc,{count:absNxt.length}))
                     : React.createElement('div',{className:'flex-1'})
                 );
               });
