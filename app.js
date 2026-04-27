@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.4";
+const APP_VERSION = "2.6.5";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -884,7 +884,7 @@ const CongesApp = () => {
         if (!employe) return null;
         let dateDebut, dateFin;
         if (conge.isRecurrent) {
-          dateDebut = dateStr; dateFin = dateStr;
+          dateDebut = fmtDate(dateStr); dateFin = fmtDate(dateStr);
         } else if (conge.dateDebut && conge.dateFin) {
           dateDebut = fmtDate(conge.dateDebut);
           dateFin   = fmtDate(conge.dateFin);
