@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.3";
+const APP_VERSION = "2.6.4";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -61,6 +61,13 @@ const toLocalDateStr = (d) =>
   d.getFullYear() + '-' +
   String(d.getMonth() + 1).padStart(2, '0') + '-' +
   String(d.getDate()).padStart(2, '0');
+
+// Convertit YYYY-MM-DD en jj/mm/aaaa pour l'affichage
+const fmtDate = (s) => {
+  if(!s) return '—';
+  const p=s.split('-'); if(p.length!==3) return s;
+  return p[2]+'/'+p[1]+'/'+p[0];
+};
 
 // ===== JOURS =====
 const JOURS_SEMAINE = [
@@ -745,7 +752,7 @@ const CongesApp = () => {
       const normaux = getChevauchements(employe_id, dateDebut, finEff, 'Congé');
       if (normaux.length > 0) {
         const listing = normaux.map(cx =>
-          '• ' + (cx.dateDebut || cx.date) + ' → ' + (cx.dateFin || cx.date) + ' (' + (cx.nbJours || 1) + ' jour(s))'
+          '• ' + fmtDate(cx.dateDebut || cx.date) + ' → ' + fmtDate(cx.dateFin || cx.date) + ' (' + (cx.nbJours || 1) + ' jour(s))'
         ).join('\n');
         const msg = '⚠️ ' + nomEmp + ' a déjà des congés sur cette période :\n\n' +
           listing + '\n\n' +
@@ -783,7 +790,7 @@ const CongesApp = () => {
       if (recs.length > 0) {
         const listing = recs.map(rec => {
           const jl = (j) => (j||[]).map(d => { const found = JOURS_SEMAINE.find(js => js.value === d); return found ? found.label : d; }).join(', ');
-          return '• ' + (rec.pattern === 'weekly' ? 'Hebdo : ' + jl(rec.jours) : 'Paires : ' + jl(rec.joursP) + ' | Impaires : ' + jl(rec.joursI));
+          return '• ' + (rec.pattern === 'weekly' ? 'Hebdo : ' + jl(rec.jours) : 'Paires : ' + jl(rec.joursP) + ' | Impaires : ' + jl(rec.joursI)) + ' (du '+fmtDate(rec.dateDebut)+')';
         }).join('\n');
         const msg = '⚠️ ' + nomEmp + ' a du temps partiel sur cette période :\n\n' +
           listing + '\n\n' +
@@ -879,10 +886,10 @@ const CongesApp = () => {
         if (conge.isRecurrent) {
           dateDebut = dateStr; dateFin = dateStr;
         } else if (conge.dateDebut && conge.dateFin) {
-          dateDebut = new Date(conge.dateDebut).toLocaleDateString('fr-BE');
-          dateFin   = new Date(conge.dateFin).toLocaleDateString('fr-BE');
+          dateDebut = fmtDate(conge.dateDebut);
+          dateFin   = fmtDate(conge.dateFin);
         } else {
-          dateDebut = dateFin = dateStr;
+          dateDebut = dateFin = fmtDate(dateStr);
         }
         return { employe, dateDebut, dateFin, type: conge.type, demi_journee: conge.demi_journee, isRecurrent: conge.isRecurrent };
       })
@@ -934,7 +941,7 @@ const CongesApp = () => {
         React.createElement('div', { className:'flex justify-between items-center mb-4' },
           React.createElement('div', null,
             React.createElement('h1', { className:'text-2xl font-bold' }, 'RH — Gestion des Congés'),
-            React.createElement('p', { className:'text-sm text-gray-600' }, `${aujourd_hui.toLocaleDateString('fr-BE')} | v${APP_VERSION}`)
+            React.createElement('p', { className:'text-sm text-gray-600' }, `${String(aujourd_hui.getDate()).padStart(2,'0')+'/'+String(aujourd_hui.getMonth()+1).padStart(2,'0')+'/'+aujourd_hui.getFullYear()} | v${APP_VERSION}`)
           ),
           React.createElement('div', { className:'flex items-center gap-3' },
             undoStack.length > 0 && React.createElement('div', { className:'flex items-center' },
@@ -1003,7 +1010,7 @@ const CongesApp = () => {
             ),
             selectedRanges.length > 0 && React.createElement('div',{className:'bg-green-50 border border-green-300 rounded p-2 text-xs text-green-800'},
               React.createElement('p',{className:'font-bold mb-1'},'📅 '+selectedRanges.length+' plage(s) :'),
-              selectedRanges.map((r,i)=>React.createElement('p',{key:i},'• '+r.start+(r.end!==r.start?' → '+r.end:'')))  
+              selectedRanges.map((r,i)=>React.createElement('p',{key:i},'• '+fmtDate(r.start)+(r.end!==r.start?' → '+fmtDate(r.end):'')))  
             ),
             React.createElement('button', {
               onClick:ajouterConge,
@@ -1084,8 +1091,8 @@ const CongesApp = () => {
                           React.createElement('span',{className:`px-2 py-1 rounded text-xs ${cfg.color} ${cfg.text}`},`${cfg.icon} ${c.type}`)
                         ),
                         React.createElement('td',{className:'px-3 py-2 text-center'},c.demi_journee||'—'),
-                        React.createElement('td',{className:'px-3 py-2'},c.dateDebut||c.date||'—'),
-                        React.createElement('td',{className:'px-3 py-2'},c.dateFin||c.date||'—'),
+                        React.createElement('td',{className:'px-3 py-2'},fmtDate(c.dateDebut||c.date)||'—'),
+                        React.createElement('td',{className:'px-3 py-2'},fmtDate(c.dateFin||c.date)||'—'),
                         React.createElement('td',{className:'px-3 py-2 text-center font-bold'},c.nbJours||1),
                         React.createElement('td',{className:'px-3 py-2'},
                           React.createElement('button',{
@@ -1139,7 +1146,7 @@ const CongesApp = () => {
                             rec.demi_journee==='AM' ? '☀️ Matin seulement' : '🌙 Après-midi seulement'
                           ),
                           React.createElement('p',{className:'text-xs text-gray-400 mt-1'},
-                            `Du ${rec.dateDebut}${rec.dateFin ? ` au ${rec.dateFin}` : ' (indéfini)'}`
+                            'Du '+fmtDate(rec.dateDebut)+(rec.dateFin?' au '+fmtDate(rec.dateFin):' (indéfini)')
                           )
                         ),
                         React.createElement('div',{className:'flex gap-2'},
@@ -1209,7 +1216,7 @@ const CongesApp = () => {
       React.createElement('div', { className:'max-w-4xl mx-auto px-6 py-4 flex justify-between items-center' },
         React.createElement('div', null,
           React.createElement('h1',{className:'text-2xl font-bold'},'Calendrier des Congés'),
-          React.createElement('p',{className:'text-sm text-gray-600'},aujourd_hui.toLocaleDateString('fr-BE'))
+          React.createElement('p',{className:'text-sm text-gray-600'},String(aujourd_hui.getDate()).padStart(2,'0')+'/'+String(aujourd_hui.getMonth()+1).padStart(2,'0')+'/'+aujourd_hui.getFullYear())
         ),
         React.createElement('div', { className:'flex items-center gap-4' },
           React.createElement('span',{className:'text-xs text-gray-500'},`v${APP_VERSION}`),
