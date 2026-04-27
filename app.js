@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.5";
+const APP_VERSION = "2.6.6";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -1220,6 +1220,7 @@ const CongesApp = () => {
         ),
         React.createElement('div', { className:'flex items-center gap-4' },
           React.createElement('span',{className:'text-xs text-gray-500'},`v${APP_VERSION}`),
+          React.createElement('span',{className:'text-xs text-gray-300 ml-2'},'© Louis Verbeek'),
           React.createElement('button',{onClick:()=>setShowRHLogin(true),className:'px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2'},React.createElement(Lock),' RH')
         )
       )
