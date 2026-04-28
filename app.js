@@ -1,7 +1,7 @@
 const { useState, useEffect, useCallback } = React;
 
 // ===== VERSION =====
-const APP_VERSION = "2.6.8";
+const APP_VERSION = "2.6.9";
 
 // ===== FIREBASE CONFIG =====
 const FIREBASE_URL      = "https://conges-belgique-default-rtdb.europe-west1.firebasedatabase.app";
@@ -1241,19 +1241,21 @@ const CongesApp = () => {
         ),
         getAbsentsOfDay(jourAffiche).length===0
           ? React.createElement('p',{className:'text-gray-500 text-sm'},'Aucune absence ce jour')
-          : getAbsentsOfDay(jourAffiche).map((a,i)=>{
-              return React.createElement('div',{key:i,className:'flex gap-3 p-3 rounded border bg-slate-100 border-slate-300 mb-2'},
-                React.createElement('span',null,'🚫'),
-                React.createElement('div',null,
-                  React.createElement('p',{className:'font-medium text-sm text-slate-700'},a.employe.nom),
-                  React.createElement('p',{className:'text-xs text-slate-500'},
-                    a.demi_journee
-                      ? (a.demi_journee==='AM'?'☀️ Matin':'🌙 Après-midi')+' : '+a.dateDebut+' → '+a.dateFin
-                      : 'Absent : '+a.dateDebut+' → '+a.dateFin
+          : React.createElement('div',{className:'grid grid-cols-3 gap-2'},
+              getAbsentsOfDay(jourAffiche).map((a,i)=>
+                React.createElement('div',{key:i,className:'flex items-start gap-2 p-2 rounded border bg-slate-100 border-slate-300'},
+                  React.createElement('span',{className:'text-sm mt-0.5'},'🚫'),
+                  React.createElement('div',{className:'min-w-0'},
+                    React.createElement('p',{className:'font-medium text-xs text-slate-700 truncate'},a.employe.nom),
+                    React.createElement('p',{className:'text-xs text-slate-400 truncate'},
+                      a.demi_journee
+                        ? (a.demi_journee==='AM'?'☀️ AM':'🌙 PM')+' · '+a.dateDebut
+                        : a.dateDebut+(a.dateFin!==a.dateDebut?' → '+a.dateFin:'')
+                    )
                   )
                 )
-              );
-            })
+              )
+            )
       ),
 
       // Calendrier
